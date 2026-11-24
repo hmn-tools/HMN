@@ -30,7 +30,7 @@ export function renderLines(lines: string[], format: "bmp" | "png", depth: Depth
   const scale = height > 1000 ? 2 : 1;
   const grey = new Uint8Array(width * height);
   grey.fill(255);
-  fillRect(grey, width, 0, 0, width, 8 * scale, 0);
+  // Garden on a one-bit panel: no ink band at the top, and a thin rule above a plain footer, not an ink bar.
   let y = 28 * scale;
   const step = 20 * scale;
   for (const line of lines.slice(0, -1)) {
@@ -39,8 +39,8 @@ export function renderLines(lines: string[], format: "bmp" | "png", depth: Depth
     if (y > height - 40 * scale) break;
   }
   const barTop = height - 32 * scale;
-  fillRect(grey, width, 0, barTop, width, height - barTop, 0);
-  blit(grey, width, height, clean(bar, 80), 24 * scale, barTop + 4, 255, scale);
+  fillRect(grey, width, 24 * scale, barTop, width - 48 * scale, scale, 0);
+  blit(grey, width, height, clean(bar.replace(/^>\s*/, ""), 80), 24 * scale, barTop + 8 * scale, 0, scale);
   if (depth === "bwry") {
     // A four-colour panel takes a palette PNG. A 1-bit BMP is not safe on it.
     return encodePngIndexed(2, BWRY_INKS, (x, py) => ((grey[py * width + x] ?? 0) >= 128 ? 1 : 0), width, height);

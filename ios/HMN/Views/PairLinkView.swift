@@ -28,7 +28,7 @@ struct PairLinkSheet: View {
                         MessageLine(text: "This code has no address. Type the address in Settings first.", isError: true)
                     } else {
                         Button(working ? "Pairing" : "Pair") { Task { await pair() } }
-                            .buttonStyle(InkButtonStyle(filled: true))
+                            .buttonStyle(PillButtonStyle())
                             .disabled(working)
                     }
                     if let message { MessageLine(text: message, isError: true) }

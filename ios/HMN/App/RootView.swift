@@ -9,7 +9,7 @@ struct RootView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            RuledPaper().ignoresSafeArea()
+            Theme.ground.ignoresSafeArea()
             Group {
                 if session.isMember {
                     MemberRootView()

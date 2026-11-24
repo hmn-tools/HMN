@@ -1,3 +1,4 @@
+import { gardenPage } from "../garden";
 import type { Hmn } from "../hmn";
 import { listJournals } from "../journal";
 import { childTierOf, projectEntity, type AreaInfo } from "../policy";
@@ -84,11 +85,12 @@ export function accessHtml(connections: ReturnType<typeof accessConnections>["co
   const rows = connections
     .map((item) => {
       const reads = item.reads.map((read) => `${read.at} ${read.type} ${read.title ?? ""}`.trim()).join("; ") || "No reads at this ceiling.";
-      const button = item.revocable ? `<form method="post" action="/api/v1/access/${esc(item.id)}/revoke"><button type="submit">Revoke</button></form>` : "";
-      return `<article><h2>${esc(item.name)}</h2><p>${esc(item.kind)} · cap ${esc(item.tier_cap)} · ${esc(item.scopes.join(", "))} · last ${esc(item.last_access ?? "never")}</p><p>${esc(reads)}</p>${button}</article>`;
+      const button = item.revocable ? `<form method="post" action="/api/v1/access/${esc(item.id)}/revoke"><button type="submit" class="danger">Revoke</button></form>` : "";
+      return `<article class="card"><h2>${esc(item.name)}</h2><p class="s">${esc(item.kind)} · cap ${esc(item.tier_cap)} · ${esc(item.scopes.join(", "))} · last <span class="data">${esc(item.last_access ?? "never")}</span></p><p class="note">${esc(reads)}</p>${button}</article>`;
     })
     .join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Connected</title></head><body style="font-family:ui-monospace,monospace;background:#F4F4F2;color:#0D0D0D;padding:28px"><h1>Connected agents and apps</h1>${rows}</body></html>`;
+  const empty = connections.length ? "" : `<p class="lead">Nothing is connected yet.</p>`;
+  return gardenPage("Connected", `<h1>Connected agents and apps</h1>${empty}${rows}`);
 }
 
 function esc(value: string): string {

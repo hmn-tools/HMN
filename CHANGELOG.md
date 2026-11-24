@@ -18,6 +18,8 @@ Update the server and the iPhone app together.
 - The demonstration is in Perth time (`Australia/Perth`, AWST). A server with no zone from the caller uses UTC.
 - The person page: People gives each person one line, the kind and the next date with them. A tap opens the person's page: the next dates, the open tasks with a tick, their routines, the notes about them, the things and people linked to them, and what was done in the last two weeks. Edit opens the record. A new person kind, Organisation, is for a school, a garage, or a doctor, and People lists organisations after the people. Routes: `GET /api/v1/people`, `GET /api/v1/person/:id/page`.
 - The yearly review: "The year" at the end of the week page opens one card for a calendar year. It has your note for the year (Private), the goals, the projects that finished, the year month by month, the people of the year, and what is still open. No charts, no streaks, no comparison with another year. Routes: `GET /api/v1/review/year`, `PUT /api/v1/review/year/:year/note`.
+- A tidier app. A row on Today opens its item. Review keeps a Sealed proposal at the end of the queue, and you can decline it without reading. A calendar has Change for its name, address, area, and tier. Settings has clear groups, and Agents and apps is one screen for the connected clients and the keys. Each removal asks first, each screen shows a quiet spinner while it loads, and Activity and Rules are in the new design. The screen rows carry `type`.
+- The menu bar app, the widget, and the server pages are in the same Garden design as the app, with IBM Plex Sans. The Public TRMNL deck loses its ink bars.
 
 ## 0.2.1, 2026-11-23
 

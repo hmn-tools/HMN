@@ -26,20 +26,23 @@ struct SettingsView: View {
                         field("Address of your HMN", text: $session.serverURL)
                         field("Certificate fingerprint", text: $session.fingerprint)
                         codeField
-                        Button("Pair this phone") { Task { await pair() } }.buttonStyle(InkButtonStyle(filled: true))
+                        Button("Pair this phone") { Task { await pair() } }.buttonStyle(PillButtonStyle())
                     }
                     if let message { MessageLine(text: message, isError: true) }
                     if hidden { HiddenNote() }
-                    group("Access") {
+                    group("People and agents") {
                         row("Household") { HouseholdView() }
-                        row("Connected agents and apps") { ConnectedView() }
-                        row("Agent keys") { KeysView() }
+                        row("Agents and apps", last: true) { AgentsAndAppsView() }
+                    }
+                    Text(spendLine).font(Theme.small).foregroundStyle(Theme.stone).padding(.horizontal, 4)
+                    group("Your record") {
                         row("Calendars") { CalendarsView() }
-                        row("Areas and kinds") { AreasView() }
-                        row("Privacy") { PrivacyView() }
+                        row("Areas and kinds", last: true) { AreasView() }
+                    }
+                    group("Privacy") {
+                        row("Who sees what") { PrivacyView() }
                         row("Audit log", last: true) { AuditView() }
                     }
-                    Text(spendLine).font(Theme.font(12)).foregroundStyle(Theme.graphite)
                     group("The graph") {
                         ForEach(graph, id: \.self) { type in
                             row(type.capitalized + "s", last: type == graph.last) {
@@ -138,6 +141,31 @@ struct SettingsView: View {
     }
 }
 
+/// One screen for what reads your HMN from outside: the connected agents and apps, and the keys you made for them.
+struct AgentsAndAppsView: View {
+    @State private var part = "connected"
+
+    var body: some View {
+        Group {
+            if part == "keys" { KeysView() } else { ConnectedView() }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack(spacing: 6) {
+                Button("Connected") { part = "connected" }.buttonStyle(ChipButtonStyle(selected: part == "connected"))
+                    .accessibilityAddTraits(part == "connected" ? [.isSelected] : [])
+                Button("Keys") { part = "keys" }.buttonStyle(ChipButtonStyle(selected: part == "keys"))
+                    .accessibilityAddTraits(part == "keys" ? [.isSelected] : [])
+                Spacer()
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 8)
+            .background(Theme.ground)
+        }
+        .navigationTitle("Agents and apps")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 /// A hidden phone cannot show its own data again. Only the Mac that runs HMN can.
 struct HiddenNote: View {
     var body: some View {
@@ -215,6 +243,7 @@ struct AuditView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if let message { MessageLine(text: message, isError: true) }
+                if !loaded && message == nil { LoadingState() }
                 if loaded && entries.isEmpty && message == nil { EmptyState(title: "Nothing yet.") }
                 if !groups.isEmpty {
                     VStack(spacing: 0) {

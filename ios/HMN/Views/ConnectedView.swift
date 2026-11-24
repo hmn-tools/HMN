@@ -15,12 +15,12 @@ struct ConnectedView: View {
             VStack(alignment: .leading, spacing: 12) {
                 if let message { MessageLine(text: message, isError: true) }
                 if let also { MessageLine(text: also) }
+                if !loaded && message == nil { LoadingState() }
                 if loaded && live.isEmpty { EmptyState(title: "Nothing connected.") }
                 ForEach(live) { item in card(item) }
             }
             .padding(22)
         }
-        .navigationTitle("Connected")
         .background(Theme.ground.ignoresSafeArea())
         .task { await load() }
         .refreshable { await load() }

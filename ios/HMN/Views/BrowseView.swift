@@ -9,11 +9,13 @@ struct BrowseView: View {
     var hiddenKind: String? = nil
     @State private var rows: [Entity] = []
     @State private var message: String?
+    @State private var loaded = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                if rows.isEmpty {
+                if !loaded { LoadingState() }
+                if loaded && rows.isEmpty {
                     Text(message ?? empty).font(Theme.font(14)).foregroundStyle(Theme.graphite).padding(.top, 12)
                 }
                 if !rows.isEmpty {
@@ -54,6 +56,7 @@ struct BrowseView: View {
     private func load() async {
         do { rows = try await session.client().entities(type).filter { hiddenKind == nil || $0.kind != hiddenKind } }
         catch { message = error.localizedDescription }
+        loaded = true
     }
 }
 
@@ -70,6 +73,7 @@ struct EntityDetailView: View {
     @State private var status = ""
     @State private var message: String?
     @State private var confirmDelete = false
+    @State private var unlinking: GraphLink?
     private let tiers = ["public", "household", "personal", "private", "sealed"]
 
     var body: some View {
@@ -124,7 +128,7 @@ struct EntityDetailView: View {
                                     Text(link.peer.title).font(Theme.row).foregroundStyle(Theme.ink)
                                 }
                                 Spacer()
-                                Button("Remove") { Task { await unlink(link.id) } }.buttonStyle(TextButtonStyle())
+                                Button("Remove") { unlinking = link }.buttonStyle(TextButtonStyle(danger: true))
                             }
                             .padding(.horizontal, Theme.Space.l)
                             .frame(minHeight: 52)
@@ -141,6 +145,15 @@ struct EntityDetailView: View {
         .navigationTitle(type.capitalized)
         .navigationBarTitleDisplayMode(.inline)
         .background(Theme.ground.ignoresSafeArea())
+        .confirmationDialog("Remove the link to \(unlinking?.peer.title ?? "it")?", isPresented: Binding(get: { unlinking != nil }, set: { if !$0 { unlinking = nil } }), titleVisibility: .visible) {
+            Button("Remove", role: .destructive) {
+                if let link = unlinking { Task { await unlink(link.id) } }
+                unlinking = nil
+            }
+            Button("Cancel", role: .cancel) { unlinking = nil }
+        } message: {
+            Text("Both items stay. Only the link goes.")
+        }
         .confirmationDialog("Delete \(title.isEmpty ? "this" : title)?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) { Task { await remove() } }
             Button("Cancel", role: .cancel) {}

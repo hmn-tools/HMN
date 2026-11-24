@@ -46,7 +46,7 @@ struct HMNWidgetView: View {
             if family == .systemSmall { small(screen) } else { medium(screen) }
         } else {
             Text("Open HMN to pair this phone.")
-                .font(.custom("IBMPlexMono-Regular", size: 12))
+                .font(WidgetFont.small)
                 .foregroundStyle(WidgetColor.graphite)
                 .padding()
                 .containerBackground(WidgetColor.card, for: .widget)
@@ -64,13 +64,14 @@ struct HMNWidgetView: View {
                 .buttonStyle(.plain)
                 Text("\(screen.dueCount) DUE")
             }
-            .font(.custom("IBMPlexMono-Medium", size: 10))
-            Text("\(screen.dueCount)").font(.custom("IBMPlexMono-SemiBold", size: 40))
+            .font(WidgetFont.label)
+            .foregroundStyle(WidgetColor.stone)
+            Text("\(screen.dueCount)").font(WidgetFont.sans(40, .semibold)).foregroundStyle(WidgetColor.ink)
             if let next = screen.next {
-                Text("Next: \(next.title)").font(.custom("IBMPlexMono-Medium", size: 12))
-                Text(next.subtitle).font(.custom("IBMPlexMono-Regular", size: 11)).foregroundStyle(.secondary)
+                Text("Next: \(next.title)").font(WidgetFont.row).foregroundStyle(WidgetColor.ink).lineLimit(2)
+                Text(next.subtitle).font(WidgetFont.small).foregroundStyle(WidgetColor.stone)
             } else {
-                Text("Nothing coming.").font(.custom("IBMPlexMono-Regular", size: 12))
+                Text("Nothing coming.").font(WidgetFont.small).foregroundStyle(WidgetColor.graphite)
             }
             Spacer(minLength: 0)
         }
@@ -90,11 +91,15 @@ struct HMNWidgetView: View {
                 .buttonStyle(.plain)
                 Text("UPDATED \(screen.updatedLabel)")
             }
-            .font(.custom("IBMPlexMono-Medium", size: 10))
+            .font(WidgetFont.label)
+            .foregroundStyle(WidgetColor.stone)
+            if due.isEmpty {
+                Text("Nothing due.").font(WidgetFont.small).foregroundStyle(WidgetColor.graphite)
+            }
             ForEach(Array(due.enumerated()), id: \.offset) { _, item in
                 HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 2).stroke(WidgetColor.ink, lineWidth: 1.2).frame(width: 14, height: 14)
-                    Text(item.title).font(.custom("IBMPlexMono-Medium", size: 13)).lineLimit(1)
+                    Circle().stroke(WidgetColor.graphite, lineWidth: 1.2).frame(width: 14, height: 14)
+                    Text(item.title).font(WidgetFont.row).foregroundStyle(WidgetColor.ink).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
@@ -148,8 +153,8 @@ struct LockWidgetView: View {
                 Text(title.prefix(1)).font(.headline)
             } else {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.custom("IBMPlexMono-Medium", size: 12)).lineLimit(1)
-                    Text(subtitle).font(.custom("IBMPlexMono-Regular", size: 10)).lineLimit(2)
+                    Text(title).font(WidgetFont.sans(13, .medium)).lineLimit(1)
+                    Text(subtitle).font(WidgetFont.sans(11)).lineLimit(2)
                 }
             }
         }
@@ -162,10 +167,11 @@ struct StandByWidgetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TO WATCH").font(.custom("IBMPlexMono-Medium", size: 10))
+            Text("TO WATCH").font(WidgetFont.label).foregroundStyle(WidgetColor.stone)
             Text(entry.card?.title.isEmpty == false ? entry.card!.title : "Nothing coming.")
-                .font(.custom("IBMPlexMono-SemiBold", size: 22))
-            Text(entry.card?.subtitle ?? "").font(.custom("IBMPlexMono-Regular", size: 12))
+                .font(WidgetFont.sans(22, .semibold))
+                .foregroundStyle(WidgetColor.ink)
+            Text(entry.card?.subtitle ?? "").font(WidgetFont.small).foregroundStyle(WidgetColor.stone)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .padding(16)
@@ -177,8 +183,8 @@ struct NextEventLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: NextEventAttributes.self) { context in
             VStack(alignment: .leading, spacing: 4) {
-                Text(context.state.title).font(.custom("IBMPlexMono-SemiBold", size: 16))
-                Text(context.state.subtitle).font(.custom("IBMPlexMono-Regular", size: 12))
+                Text(context.state.title).font(WidgetFont.sans(16, .semibold))
+                Text(context.state.subtitle).font(WidgetFont.sans(13))
             }
             .padding()
             // The card is always dark on the lock screen, so its text is always light.
@@ -253,11 +259,30 @@ enum WidgetColor {
     static let card = adaptive(0xFFFFFF, 0x1E1E1C)
     static let ink = adaptive(0x0D0D0D, 0xEDEDEA)
     static let graphite = adaptive(0x434343, 0xC6C6C1)
+    static let stone = adaptive(0x595956, 0x9E9E98)
 
     private static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
         Color(UIColor { traits in
             let value = traits.userInterfaceStyle == .dark ? dark : light
             return UIColor(red: CGFloat((value >> 16) & 0xFF) / 255, green: CGFloat((value >> 8) & 0xFF) / 255, blue: CGFloat(value & 0xFF) / 255, alpha: 1)
         })
+    }
+}
+
+/// The type of the widget: Garden. Plex Sans for titles and sentences, Plex Mono for labels only.
+/// The extension bundles its own copy of the font files. The system face is the fallback.
+enum WidgetFont {
+    static let label = Font.custom("IBMPlexMono-Medium", size: 10)
+    static let row = sans(13, .medium)
+    static let small = sans(12)
+
+    static func sans(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        let name: String
+        switch weight {
+        case .semibold, .bold, .heavy, .black: name = "IBMPlexSans-SemiBold"
+        case .medium: name = "IBMPlexSans-Medium"
+        default: name = "IBMPlexSans-Regular"
+        }
+        return .custom(name, size: size)
     }
 }

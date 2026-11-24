@@ -454,7 +454,7 @@ Open, and each one needs the owner:
 
 ## Slice 21 — Design system and UX cleanup
 
-**Status: part A is in the code since 2026-11-23. Parts B to E are open.** The owner asked for a full review of the UI on 2026-11-23. Five review agents read the code, and the findings were checked in the code and on screens in the simulator. The owner then chose the direction from a canvas of options: Garden (white cards on a stone ground), in sans, with ink as the lead colour. [UX.md](UX.md) has the system under "Design system".
+**Status: part A is in the code since 2026-11-23, and parts B to E since 2026-11-24. Part D drops one item, see below.** The owner asked for a full review of the UI on 2026-11-23. Five review agents read the code, and the findings were checked in the code and on screens in the simulator. The owner then chose the direction from a canvas of options: Garden (white cards on a stone ground), in sans, with ink as the lead colour. [UX.md](UX.md) has the system under "Design system".
 
 Done in part A:
 
@@ -470,10 +470,10 @@ Done in part A:
 Open:
 
 - **A, the rest.** Done on 2026-11-23: the files of IBM Plex Sans are in the iPhone app and the website, and the screens of the website were taken again with them. The widget and the menu bar app keep the mono face until their own part of this slice.
-- **B, rules for each screen.** A confirmation before each destructive action, one message next to its control, a loading state, and a selected state on each choice. Settings, Keys, Calendars, Areas, Browse, Rules, and Activity still have their old layout.
-- **C, flows.** A link or a QR code for the pairing. Rows on Today that open an item. Pages that swipe. A Sealed proposal that does not block the queue. A calendar that can be changed.
-- **D, structure.** One screen for agents and apps. Settings in groups. People and Projects in one Browse tab.
-- **E, other surfaces.** The menu bar app, the widget, the server pages, and the display image on the same tokens.
+- **B, rules for each screen. Done on 2026-11-24.** A confirmation before each removal: a kind, a link, a rule, and a routine (keys, members, and phones had one before). One `LoadingState` in place of an empty card while a screen waits. A selected state on each choice: the kind of a new key is a pair of chips. Activity and Rules are rows in cards, with text buttons and the message next to them. The old names `InkCard`, `InkButtonStyle`, and `RuledPaper` are gone, and the edit sheet of Review uses fields, not a form.
+- **C, flows. Done on 2026-11-24.** The QR pairing and the pages that swipe were done before. A row on Today that is an entity opens it: the screen rows have `type` (SCHEMA.md, the read format), and a person opens the person page. A Sealed proposal waits at the end of the Review queue, and it can be declined without reading. Change on a calendar sets its name, a new address, its area, and the tier of its events.
+- **D, structure. Done on 2026-11-24.** One screen, Agents and apps, holds the connected clients and the keys, with two chips. Settings has the groups People and agents, Your record, Privacy, and The graph. The item "People and Projects in one Browse tab" is dropped: [ONTOLOGY.md](ONTOLOGY.md), section 5.2, decided on 2026-11-23 that the tabs follow the verbs, with People and Projects as two tabs.
+- **E, other surfaces. Done on 2026-11-24.** The menu bar app, the widget, and the pages that the server serves use Garden, with the same tokens in light and dark. The menu bar app and the widget bundle IBM Plex Sans for text and keep Plex Mono for labels and data. The server pages name Plex Sans first and use the system sans when the computer does not have it, so they load nothing from the network. The Public TRMNL deck stays one-bit black and white: it has no ink band at the top, and a thin rule and a plain label replace the ink footer bar.
 
 ## Slice 22 — Security audit and hardening
 

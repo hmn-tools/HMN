@@ -20,6 +20,8 @@ struct TodayView: View {
     @State private var completed: ScreenItem?
     /// The yearly review opens from the week page.
     @State private var showYear = false
+    /// The row that the owner opened.
+    @State private var opened: ScreenItem?
     private let deck = ["today", "upcoming", "commitments", "quiet", "week"]
     /// The sections whose rows are tasks. A row there has a circle that completes it.
     private let taskSections: Set<String> = ["due", "commitments", "slipped", "mine", "today"]
@@ -69,6 +71,7 @@ struct TodayView: View {
             await load()
         }
         .sheet(isPresented: $showYear) { YearReviewView().themed() }
+        .sheet(item: $opened, onDismiss: { Task { await load() } }) { item in OpenedItem(item: item).themed() }
         // The owner pairs the phone in Settings. Today reads again when that sheet closes.
         .onChange(of: session.showSettings) { _, open in
             if !open { Task { await load() } }
@@ -88,7 +91,7 @@ struct TodayView: View {
             Text("It may have been changed.")
                 .font(Theme.font(12)).foregroundStyle(Theme.graphite)
             Button("I have seen this") { Task { await session.acknowledgeAuditAlarm() } }
-                .buttonStyle(InkButtonStyle(filled: false))
+                .buttonStyle(PillButtonStyle(kind: .secondary))
         }
         .card()
     }
@@ -160,6 +163,20 @@ struct TodayView: View {
         }
     }
 
+    private func rowText(_ item: ScreenItem) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(item.title).font(Theme.row)
+            if !item.subtitle.isEmpty {
+                Text(item.subtitle).font(Theme.small).foregroundStyle(Theme.stone)
+            }
+        }
+    }
+
+    /// The owner opens a row that is an entity. A member's Home stays a glance.
+    private func opens(_ item: ScreenItem) -> Bool {
+        item.type != nil && !session.isMember && !asleep
+    }
+
     private func row(_ item: ScreenItem, in section: ScreenSection) -> some View {
         HStack(alignment: .center, spacing: 12) {
             if section.id == "routines" {
@@ -175,13 +192,20 @@ struct TodayView: View {
             } else {
                 glyph(item).frame(minWidth: 32)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title).font(Theme.row)
-                if !item.subtitle.isEmpty {
-                    Text(item.subtitle).font(Theme.small).foregroundStyle(Theme.stone)
+            if opens(item) {
+                Button { opened = item } label: {
+                    HStack(spacing: 0) {
+                        rowText(item)
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens it")
+            } else {
+                rowText(item)
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
             if let badge = item.badge {
                 Text(badge)
                     .font(Theme.mono(10, weight: .medium))
@@ -443,5 +467,24 @@ struct Mark: View {
             .renderingMode(.template)
             .scaledToFit()
             .frame(width: size, height: size)
+    }
+}
+
+/// A row of Today, opened in a sheet: a person opens the person page, and the rest open the record.
+struct OpenedItem: View {
+    @Environment(\.dismiss) private var dismiss
+    let item: ScreenItem
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if item.type == "person" {
+                    PersonPageView(id: item.id, title: item.title)
+                } else {
+                    EntityDetailView(type: item.type ?? "task", id: item.id)
+                }
+            }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+        }
     }
 }

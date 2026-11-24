@@ -14,7 +14,7 @@ struct HMNMenuApp: App {
             MenuRootView(model: model)
         } label: {
             Text("HMN")
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .font(.system(size: 12, weight: .medium))
         }
         .menuBarExtraStyle(.window)
         .defaultSize(width: 360, height: 560)

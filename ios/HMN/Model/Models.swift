@@ -40,6 +40,8 @@ struct ScreenItem: Codable, Equatable, Identifiable {
     var badge: String?
     var dateMark: String?
     var accent: String?
+    /// The type of the row's entity. A row with a type opens its item.
+    var type: String?
 }
 
 struct Entity: Codable, Identifiable, Equatable {

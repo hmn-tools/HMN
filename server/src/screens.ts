@@ -30,6 +30,8 @@ export type ScreenItem = {
   badge?: string;
   date_mark?: string;
   accent?: "teal";
+  /** The type of the row's entity, so that a client can open it. Absent for a row that is not an entity. */
+  type?: string;
 };
 
 export type ScreenSection = {

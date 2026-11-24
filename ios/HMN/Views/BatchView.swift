@@ -37,9 +37,9 @@ struct BatchView: View {
                 if !readable.isEmpty {
                     HStack(spacing: 12) {
                         Button("Decline \(picked.count)") { Task { await decide(approve: false) } }
-                            .buttonStyle(InkButtonStyle(filled: false))
+                            .buttonStyle(PillButtonStyle(kind: .secondary))
                         Button("Approve \(picked.count)") { Task { await decide(approve: true) } }
-                            .buttonStyle(InkButtonStyle(filled: true))
+                            .buttonStyle(PillButtonStyle())
                     }
                     .disabled(picked.isEmpty || working)
                     .opacity(picked.isEmpty || working ? 0.4 : 1)
@@ -48,7 +48,7 @@ struct BatchView: View {
             }
             .padding(22)
         }
-        .background(RuledPaper().ignoresSafeArea())
+        .background(Theme.ground.ignoresSafeArea())
         .navigationTitle("Review")
         .background(Theme.ground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)

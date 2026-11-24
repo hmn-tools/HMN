@@ -20,16 +20,18 @@ struct KeysView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                if !loaded && message == nil { LoadingState() }
                 if let message { MessageLine(text: message) }
                 if loaded && active.isEmpty { EmptyState(title: "No keys yet.") }
                 ForEach(active) { key in card(key) }
                 SmallLabel(text: "New key").padding(.top, 10)
                 VStack(alignment: .leading, spacing: 12) {
-                    Picker("Kind", selection: $isView) {
-                        Text("Agent").tag(false)
-                        Text("View").tag(true)
+                    HStack(spacing: 6) {
+                        Button("Agent") { isView = false }.buttonStyle(ChipButtonStyle(selected: !isView))
+                            .accessibilityAddTraits(!isView ? [.isSelected] : [])
+                        Button("View") { isView = true }.buttonStyle(ChipButtonStyle(selected: isView))
+                            .accessibilityAddTraits(isView ? [.isSelected] : [])
                     }
-                    .pickerStyle(.segmented)
                     Text(isView ? "Reads Public only. For a screen." : "Reads up to Personal, and proposes.")
                         .font(Theme.small).foregroundStyle(Theme.stone)
                     TextField(isView ? "kitchen" : "research", text: $name)
@@ -43,7 +45,6 @@ struct KeysView: View {
             }
             .padding(22)
         }
-        .navigationTitle("Agent keys")
         .background(Theme.ground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: Binding(get: { granting != nil }, set: { if !$0 { granting = nil } })) {

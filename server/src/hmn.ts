@@ -2235,6 +2235,17 @@ export class Hmn {
     else if (id === "agents") screen = buildAgents(input, this.listProposals(access, "pending"));
     else if (id === "home") screen = buildHome(input, this.homeOwner(access, input.views));
     else throw new ApiError(404, "not_found", "Not found.");
+    // Each row that is an entity names its type, so that a tap can open it.
+    screen = {
+      ...screen,
+      sections: screen.sections.map((section) => ({
+        ...section,
+        items: section.items.map((item) => {
+          const type = input.views.get(item.id)?.type;
+          return type ? { ...item, type } : item;
+        }),
+      })),
+    };
     for (const entityId of screen.entity_ids) {
       const view = input.views.get(entityId);
       if (view) this.noteRead(access, view);

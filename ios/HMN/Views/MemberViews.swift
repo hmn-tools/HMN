@@ -57,6 +57,7 @@ struct FamilyTasksView: View {
     @State private var tasks: [FamilyTask] = []
     @State private var routines: [Routine] = []
     @State private var loaded = false
+    @State private var removing: Routine?
     @State private var message: String?
     @State private var note: String?
 
@@ -65,6 +66,7 @@ struct FamilyTasksView: View {
         let done = tasks.filter { $0.task.isDone }
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                if !loaded && message == nil { LoadingState() }
                 if loaded && tasks.isEmpty && routines.isEmpty {
                     Text("No family tasks yet.").font(Theme.font(14)).foregroundStyle(Theme.graphite).padding(.top, 12)
                 }
@@ -85,6 +87,15 @@ struct FamilyTasksView: View {
         }
         .navigationTitle("Family")
         .background(Theme.ground.ignoresSafeArea())
+        .confirmationDialog("Remove \(removing?.habit.title ?? "this routine")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            Button("Remove", role: .destructive) {
+                if let routine = removing { Task { await remove(routine) } }
+                removing = nil
+            }
+            Button("Cancel", role: .cancel) { removing = nil }
+        } message: {
+            Text("It leaves the phones and the fridge. Pause keeps it for later.")
+        }
         .onAppear { Task { await load() } }
         .refreshable { await load() }
     }
@@ -148,7 +159,7 @@ struct FamilyTasksView: View {
                 .contextMenu {
                     if !session.isMember {
                         Button(routine.habit.status == "paused" ? "Start again" : "Pause") { Task { await pause(routine) } }
-                        Button("Remove", role: .destructive) { Task { await remove(routine) } }
+                        Button("Remove", role: .destructive) { removing = routine }
                     }
                 }
                 if routine.id != routines.last?.id { Theme.rule.frame(height: 1).padding(.leading, 54) }
@@ -339,7 +350,7 @@ struct MemberSettingsView: View {
                         Text("Hidden. The owner shows it again from the HMN menu bar.")
                             .font(Theme.font(13)).foregroundStyle(Theme.graphite)
                     } else {
-                        Button("Hide this phone") { Task { await hide() } }.buttonStyle(InkButtonStyle(filled: false))
+                        Button("Hide this phone") { Task { await hide() } }.buttonStyle(PillButtonStyle(kind: .secondary))
                     }
                     Button("Forget this phone") { confirmForget = true }.buttonStyle(TextButtonStyle(danger: true))
                 }

@@ -18,6 +18,7 @@ struct HouseholdView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if let message { MessageLine(text: message, isError: true) }
+                if !loaded { LoadingState() }
                 if loaded && members.isEmpty { EmptyState(title: "Just you for now.") }
                 if !members.isEmpty {
                     VStack(spacing: 0) {

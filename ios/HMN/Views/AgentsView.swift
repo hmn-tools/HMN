@@ -22,7 +22,9 @@ struct AgentsView: View {
         var approved: Bool
     }
 
-    private var current: Proposal? { proposals.first }
+    /// The queue: what the owner can read first, then the Sealed proposals, so a closed vault blocks nothing.
+    private var queue: [Proposal] { proposals.filter { !$0.redacted } + proposals.filter(\.redacted) }
+    private var current: Proposal? { queue.first }
 
     var body: some View {
         ScrollView {
@@ -37,8 +39,13 @@ struct AgentsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         SmallLabel(text: "\(proposal.agentName) · Sealed")
                         Text("Sealed").font(Theme.heading)
+                        Text("It waits at the end of the queue until you open the vault.")
+                            .font(Theme.text).foregroundStyle(Theme.graphite)
                         Button("Open the vault") { Task { await openVault() } }
                             .buttonStyle(PillButtonStyle())
+                        Button("Decline without reading") { Task { await decide(proposal, approve: false) } }
+                            .buttonStyle(TextButtonStyle())
+                            .disabled(working)
                     }
                     .card(padding: 20)
                 } else if let proposal = current {
@@ -213,12 +220,14 @@ struct AgentsView: View {
 
     private var editSheet: some View {
         NavigationStack {
-            Form {
-                TextField("Title", text: $title)
-                TextField("Due", text: $due)
-                TextField("Reason", text: $reason)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    editField("Title", text: $title)
+                    editField("Due", text: $due, hint: "YYYY-MM-DD")
+                    editField("Reason", text: $reason)
+                }
+                .padding(22)
             }
-            .scrollContentBackground(.hidden)
             .navigationTitle("Edit first")
             .background(Theme.ground.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
@@ -230,6 +239,13 @@ struct AgentsView: View {
                     Button("Save") { Task { await saveEdit() } }
                 }
             }
+        }
+    }
+
+    private func editField(_ label: String, text: Binding<String>, hint: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SmallLabel(text: label)
+            TextField(hint ?? label, text: text, axis: .vertical).textFieldStyle(FieldStyle())
         }
     }
 
@@ -304,10 +320,3 @@ struct AgentsView: View {
     }
 }
 
-/** The older name of the pill button. `filled` is the primary button, and the other is the secondary one. */
-struct InkButtonStyle: ButtonStyle {
-    var filled: Bool
-    func makeBody(configuration: Configuration) -> some View {
-        PillButtonStyle(kind: filled ? .primary : .secondary).makeBody(configuration: configuration)
-    }
-}

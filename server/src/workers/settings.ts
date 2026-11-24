@@ -1,4 +1,4 @@
-import { tokens as t } from "../tokens";
+import { gardenPage, MONO } from "../garden";
 import type { JournalEntry } from "../journal";
 import type { viewWorker } from "./config";
 
@@ -46,27 +46,22 @@ export function workersHtml(workers: WorkerView[], journals: Record<string, Jour
         </dl>
         <form method="post" action="/api/v1/workers/${esc(worker.id)}">
           <input type="hidden" name="enabled" value="${next}">
-          <button type="submit">${label}</button>
+          <button type="submit" class="quiet">${label}</button>
         </form>
         <p class="note">${esc(worker.limits.join(" "))}</p>
         ${journalBlock(journals[worker.id] ?? [])}
       </article>`;
     })
     .join("");
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HMN workers</title>
-<style>
-*{box-sizing:border-box}body{margin:0;background:${t.paper};color:${t.ink};font-family:ui-monospace,monospace;padding:28px}
-h1{font-size:21px;font-weight:600;margin:0 0 8px}h2{font-size:14px;margin:0 0 8px}
-p.lead,p.note{color:${t.graphite};font-size:12px}
-.card{background:${t.card};border:1.5px solid ${t.ink};border-radius:4px;padding:12px 14px;margin:12px 0;max-width:520px}
-dl{margin:0}div{display:flex;gap:12px;padding:4px 0;border-top:1px solid ${t.hair}}
-dt{width:88px;color:${t.stone};font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding-top:3px}
-dd{margin:0;font-size:13px}
-button{margin-top:10px;font:inherit;background:${t.ink};color:${t.paper};border:0;border-radius:4px;padding:8px 14px}
-button:hover{opacity:.9}
-</style></head><body>
-<h1>Workers</h1>
+  // Each card has a Pause or a Start. They are white pills: no one of them is the main action of the page.
+  const css = `dl{margin:0}dl div{display:flex;gap:12px;padding:8px 0;border-top:1px solid var(--rule)}dl div:first-child{border-top:0}
+dt{width:88px;flex:none;font-family:${MONO};font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--stone);padding-top:2px}
+dd{margin:0;font-size:14px}form{margin-top:10px}`;
+  return gardenPage(
+    "HMN workers",
+    `<h1>Workers</h1>
 <p class="lead">Nothing is written until you approve a proposal. Pause stops the schedule.</p>
-${rows}
-</body></html>`;
+${rows}`,
+    css,
+  );
 }

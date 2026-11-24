@@ -10,6 +10,7 @@ struct AreasView: View {
     @State private var message: String?
     @State private var working = false
     @State private var loaded = false
+    @State private var removing: KindInfo?
 
     @State private var areaTitle = ""
     @State private var areaKind = "other"
@@ -24,6 +25,7 @@ struct AreasView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                if !loaded { LoadingState() }
                 if let message { MessageLine(text: message) }
                 if loaded && areas.isEmpty { EmptyState(title: "No areas yet.") }
                 if !areas.isEmpty {
@@ -82,6 +84,15 @@ struct AreasView: View {
             .padding(22)
         }
         .navigationTitle("Areas and kinds")
+        .confirmationDialog("Remove \(removing?.title ?? "this kind")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            Button("Remove", role: .destructive) {
+                if let kind = removing { Task { await remove(kind) } }
+                removing = nil
+            }
+            Button("Cancel", role: .cancel) { removing = nil }
+        } message: {
+            Text("No row uses it. You can add it again later.")
+        }
         .background(Theme.ground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: kindType) { _, _ in kindRole = "" }
@@ -117,8 +128,8 @@ struct AreasView: View {
             }
             Spacer()
             if !kind.core && kind.inUse == 0 {
-                Button("Remove") { Task { await remove(kind) } }
-                    .font(Theme.font(13, weight: .medium)).foregroundStyle(Theme.graphite)
+                Button("Remove") { removing = kind }
+                    .buttonStyle(TextButtonStyle(danger: true))
             }
         }
     }

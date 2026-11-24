@@ -1,3 +1,4 @@
+import { gardenPage } from "../garden";
 import type { Hmn } from "../hmn";
 import { handleMcp } from "../mcp";
 import { type Access, ApiError, isTier } from "../types";
@@ -191,23 +192,23 @@ function consentPage(source: URL | URLSearchParams, client: string | null, error
   const fields = ["client_id", "redirect_uri", "state", "code_challenge", "code_challenge_method", "resource"]
     .map((name) => `<input type="hidden" name="${esc(name)}" value="${esc(get(name))}">`)
     .join("");
-  const notice = error ? `<p>${esc(error)}</p>` : "";
-  return `<!doctype html><html><head><meta charset="utf-8"><title>HMN</title></head><body style="font-family:ui-monospace,monospace;background:#F4F4F2;color:#0D0D0D;padding:32px">
-<h1>Let this assistant in?</h1>
+  const notice = error ? `<p class="error">${esc(error)}</p>` : "";
+  return gardenPage(
+    "HMN",
+    `<h1>Let this assistant in?</h1>
+<div class="card">
 <p>It calls itself <strong>${esc(client ?? "an unknown client")}</strong>. That name comes from the client, so check that you started this sign-in yourself.</p>
-<p>It can read up to Personal and propose changes. It cannot see Private or Sealed, and it cannot approve.</p>
+<p class="s">It can read up to Personal and propose changes. It cannot see Private or Sealed, and it cannot approve.</p>
 ${notice}<form method="post" action="/oauth/authorize" onsubmit="this.querySelector('button').disabled=true">${fields}
 <label>Setup code from the mini <input name="setup_code" autocomplete="off"></label>
-<button type="submit">Allow</button></form></body></html>`;
+<button type="submit">Allow</button></form>
+</div>`,
+  );
 }
 
 function continuePage(target: string): string {
   const safe = esc(target);
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${safe}"><title>HMN</title></head>
-<body style="font-family:ui-monospace,monospace;background:#F4F4F2;color:#0D0D0D;padding:32px">
-<p>Continue to the assistant.</p>
-<p><a href="${safe}">Continue</a></p>
-</body></html>`;
+  return gardenPage("HMN", `<div class="card"><p>Continue to the assistant.</p><p><a href="${safe}">Continue</a></p></div>`, "", `<meta http-equiv="refresh" content="0;url=${safe}">`);
 }
 
 function json(body: unknown, status = 200, session?: string | null): Response {

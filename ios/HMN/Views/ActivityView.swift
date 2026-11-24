@@ -6,43 +6,51 @@ struct ActivityView: View {
     @State private var items: [ActivityItem] = []
     @State private var message: String?
     @State private var loaded = false
+    @State private var failed = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                SmallLabel(text: "Activity · \(items.count)")
-                if let message { Text(message).font(Theme.font(12)).foregroundStyle(Theme.graphite) }
-                if loaded && items.isEmpty {
-                    Text("Nothing is decided yet.").font(Theme.font(14)).foregroundStyle(Theme.graphite).padding(.top, 8)
-                }
-                ForEach(items) { item in
-                    InkCard {
-                        Text(item.title ?? "\(ReviewText.operation(item.op).capitalized) by \(item.agentName)")
-                            .font(Theme.font(14, weight: .medium))
-                        Text(line(item)).font(Theme.font(11)).foregroundStyle(Theme.stone)
-                        if let reason = item.reason, !reason.isEmpty {
-                            Text(reason).font(Theme.font(12)).foregroundStyle(Theme.graphite)
-                        }
-                        if item.canUndo {
-                            Button("Undo") { Task { await undo(item) } }
-                                .font(Theme.font(13, weight: .medium)).foregroundStyle(Theme.tealDark)
-                                .padding(.top, 2)
-                        }
-                        if item.canClear {
-                            Button("Allow again") { Task { await clear(item) } }
-                                .font(Theme.font(13, weight: .medium)).foregroundStyle(Theme.tealDark)
-                                .padding(.top, 2)
+                if !loaded && message == nil { LoadingState() }
+                if loaded && items.isEmpty { EmptyState(title: "Nothing decided yet.") }
+                if let message { MessageLine(text: message, isError: failed) }
+                if !items.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(items) { item in
+                            row(item)
+                            if item.id != items.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
                         }
                     }
+                    .card(padding: 0)
                 }
             }
             .padding(22)
         }
-        .background(RuledPaper().ignoresSafeArea())
         .navigationTitle("Activity")
         .background(Theme.ground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .refreshable { await load() }
+    }
+
+    /// One decision: what it was, who sent it, what happened, and its undo when there is one.
+    private func row(_ item: ActivityItem) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(item.title ?? "\(ReviewText.operation(item.op).capitalized) by \(item.agentName)").font(Theme.row)
+            Text(line(item)).font(Theme.small).foregroundStyle(Theme.stone)
+            if let reason = item.reason, !reason.isEmpty {
+                Text(reason).font(Theme.small).foregroundStyle(Theme.graphite).fixedSize(horizontal: false, vertical: true)
+            }
+            if item.canUndo || item.canClear {
+                HStack(spacing: 20) {
+                    if item.canUndo { Button("Undo") { Task { await undo(item) } }.buttonStyle(TextButtonStyle()) }
+                    if item.canClear { Button("Allow again") { Task { await clear(item) } }.buttonStyle(TextButtonStyle()) }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, 12)
     }
 
     private func line(_ item: ActivityItem) -> String {
@@ -70,6 +78,8 @@ struct ActivityView: View {
             loaded = true
         } catch {
             message = error.localizedDescription
+            failed = true
+            loaded = true
         }
     }
 
@@ -77,10 +87,12 @@ struct ActivityView: View {
         do {
             try await session.client().undo(item.id)
             message = "Undone."
+            failed = false
             await load()
             await session.refreshToday()
         } catch {
             message = error.localizedDescription
+            failed = true
         }
     }
 
@@ -88,9 +100,11 @@ struct ActivityView: View {
         do {
             try await session.client().clearDecline(item.id)
             message = "\(name(item)) can propose it again."
+            failed = false
             await load()
         } catch {
             message = error.localizedDescription
+            failed = true
         }
     }
 }

@@ -21,6 +21,9 @@
     <string>IBMPlexMono-Regular.ttf</string>
     <string>IBMPlexMono-Medium.ttf</string>
     <string>IBMPlexMono-SemiBold.ttf</string>
+    <string>IBMPlexSans-Regular.ttf</string>
+    <string>IBMPlexSans-Medium.ttf</string>
+    <string>IBMPlexSans-SemiBold.ttf</string>
   </array>
   <key>NSExtension</key>
   <dict>

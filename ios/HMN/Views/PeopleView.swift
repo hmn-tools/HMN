@@ -13,6 +13,7 @@ struct PeopleView: View {
         let organisations = people.filter(\.organisation)
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                if !loaded && message == nil { LoadingState() }
                 if loaded && people.isEmpty {
                     Text(message ?? "No one here yet.").font(Theme.font(14)).foregroundStyle(Theme.graphite).padding(.top, 12)
                 }

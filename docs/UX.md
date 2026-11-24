@@ -78,6 +78,10 @@ Each one is in `ios/HMN/Theme/Theme.swift` or `ios/HMN/Views/ReviewSupport.swift
 | `EmptyState` | One line and one smaller line, in a card. |
 | `Stripe` | The band. |
 
+### Other surfaces
+
+Since 2026-11-24 the menu bar app, the widget, and the pages that the server serves use Garden, with the tokens above in light and dark. The menu bar app and the widget bundle IBM Plex Sans for text and keep Plex Mono for labels and data. The server pages name Plex Sans first and fall back to the system sans, because they load nothing from the network. The Public TRMNL deck stays one-bit black and white, with a thin rule and a plain label at the foot. The fridge keeps its own four inks.
+
 ### Voice
 
 - Do not explain a rule that the owner did not ask about. The server refuses a score on a fixture, and no screen says so.

@@ -13,42 +13,35 @@ struct MenuRootView: View {
         VStack(spacing: 0) {
             header
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    Stripe()
-                    serverSection
-                    hairline
-                    externalSection
-                    hairline
-                    hideSection
-                    hairline
-                    pairSection
-                    hairline
-                    deviceSection
-                    hairline
-                    backupSection
-                    hairline
-                    modelSection
-                    hairline
-                    auditSection
+                VStack(alignment: .leading, spacing: 12) {
+                    // An error is first, in danger, next to nothing else.
                     if !model.notice.isEmpty {
                         Text(model.notice)
-                            .font(Theme.font(12))
-                            .foregroundStyle(Theme.coral)
-                            .padding(16)
+                            .font(Theme.font(13))
+                            .foregroundStyle(Theme.danger)
+                            .padding(.horizontal, 4)
                     }
                     if !model.ownerKeyPresent {
                         ownerSection
                     }
+                    serverSection
+                    externalSection
+                    hideSection
+                    pairSection
+                    deviceSection
+                    backupSection
+                    modelSection
+                    auditSection
                 }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
             }
-            bar
         }
         // A MenuBarExtra window proposes no height, so a ScrollView with only
         // maxHeight collapses. The header and footer alone are about 80 points
         // tall, and the rest of the panel never appears.
         .frame(width: 360, height: 560)
-        .background(RuledPaper())
-        .preferredColorScheme(.light)
+        .background(Theme.ground)
         .task { await model.refresh() }
         .alert("Restore this backup?", isPresented: $confirmRestore) {
             Button("Restore") {
@@ -71,21 +64,25 @@ struct MenuRootView: View {
     }
 
     private var header: some View {
-        HStack {
-            Text("HMN")
-                .font(Theme.font(21, weight: .semibold))
-                .foregroundStyle(Theme.ink)
-            Spacer()
-            Text(dateLabel)
-                .font(Theme.font(10, weight: .medium))
-                .foregroundStyle(Theme.stone)
-            Button("Refresh") { Task { await model.refresh() } }
-                .buttonStyle(.plain)
-                .font(Theme.font(10, weight: .medium))
-                .foregroundStyle(Theme.stone)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("HMN")
+                    .font(Theme.font(22, weight: .semibold))
+                    .foregroundStyle(Theme.ink)
+                Spacer()
+                Text(dateLabel)
+                    .font(Theme.mono(11, weight: .medium))
+                    .foregroundStyle(Theme.stone)
+                Button("Refresh") { Task { await model.refresh() } }
+                    .buttonStyle(.plain)
+                    .font(Theme.font(13, weight: .medium))
+                    .foregroundStyle(Theme.ink)
+            }
+            Stripe()
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
     }
 
     private var serverSection: some View {
@@ -103,7 +100,7 @@ struct MenuRootView: View {
                 QuietButton(title: "Restart") { Task { await model.restart() } }
             }
         }
-        .padding(16)
+        .gardenCard()
     }
 
     private var externalSection: some View {
@@ -114,7 +111,7 @@ struct MenuRootView: View {
                 .foregroundStyle(Theme.graphite)
             Text(model.externalOn ? "Port \(model.externalPort) is open. Personal at most." : "The gate is closed.")
                 .font(Theme.font(12))
-                .foregroundStyle(model.externalOn ? Theme.teal : Theme.stone)
+                .foregroundStyle(model.externalOn ? Theme.tealDark : Theme.stone)
             Toggle("Outside agents", isOn: Binding(
                 get: { model.externalOn },
                 set: { on in Task { await model.setExternal(on) } }
@@ -123,7 +120,7 @@ struct MenuRootView: View {
             .labelsHidden()
             .accessibilityLabel("Outside agents")
         }
-        .padding(16)
+        .gardenCard()
     }
 
     private var serverLine: String {
@@ -140,13 +137,13 @@ struct MenuRootView: View {
             if model.hiddenCount > 0 {
                 Text("\(model.hiddenCount) \(model.hiddenCount == 1 ? "phone is" : "phones are") hidden.")
                     .font(Theme.font(12))
-                    .foregroundStyle(Theme.teal)
+                    .foregroundStyle(Theme.tealDark)
             }
             QuietButton(title: model.hiddenCount > 0 ? "Show my things" : "Hide") {
                 Task { await model.hide() }
             }
         }
-        .padding(16)
+        .gardenCard()
     }
 
     private var pairSection: some View {
@@ -155,7 +152,7 @@ struct MenuRootView: View {
             QuietButton(title: "Pair a phone", filled: true) { Task { await model.pair() } }
             if !model.pairingCode.isEmpty {
                 Text(model.pairingCode)
-                    .font(Theme.font(21, weight: .semibold))
+                    .font(Theme.mono(21, weight: .semibold))
                     .tracking(4)
                     .foregroundStyle(Theme.ink)
                 Text("Single use. Dies in ten minutes.")
@@ -170,7 +167,7 @@ struct MenuRootView: View {
                 }
             }
         }
-        .padding(16)
+        .gardenCard()
     }
 
     private var deviceSection: some View {
@@ -199,13 +196,13 @@ struct MenuRootView: View {
                             confirmRevoke = true
                         }
                         .buttonStyle(.plain)
-                        .font(Theme.font(12))
-                        .foregroundStyle(Theme.ink)
+                        .font(Theme.font(13, weight: .medium))
+                        .foregroundStyle(Theme.danger)
                     }
                 }
             }
         }
-        .padding(16)
+        .gardenCard()
     }
 
     private var backupSection: some View {
@@ -239,7 +236,7 @@ struct MenuRootView: View {
                 }
             }
         }
-        .padding(16)
+        .gardenCard()
     }
 
     private var modelSection: some View {
@@ -253,7 +250,7 @@ struct MenuRootView: View {
                 .foregroundStyle(Theme.stone)
             Text(model.spendLine)
                 .font(Theme.font(12))
-                .foregroundStyle(model.spendNotice ? Theme.coral : Theme.graphite)
+                .foregroundStyle(model.spendNotice ? Theme.danger : Theme.graphite)
             if model.modelRoutes.isEmpty {
                 Text("No route yet.")
                     .font(Theme.font(12))
@@ -285,7 +282,7 @@ struct MenuRootView: View {
                 }
             }
         }
-        .padding(16)
+        .gardenCard()
     }
 
     private var auditSection: some View {
@@ -293,7 +290,7 @@ struct MenuRootView: View {
             label("Activity")
             Text(model.chain)
                 .font(Theme.font(12, weight: .medium))
-                .foregroundStyle(model.chainOK == false ? Theme.coral : Theme.teal)
+                .foregroundStyle(model.chainOK == false ? Theme.danger : Theme.tealDark)
             if model.audit.isEmpty {
                 Text("No private reads yet.")
                     .font(Theme.font(12))
@@ -304,14 +301,14 @@ struct MenuRootView: View {
                     Text(String(entry.at.prefix(16)).replacingOccurrences(of: "T", with: " "))
                     Spacer()
                     Text(entry.action)
-                    Text(entry.tier ?? "—")
-                    Text(entry.surface ?? "—")
+                    Text(entry.tier ?? "none")
+                    Text(entry.surface ?? "none")
                 }
-                .font(Theme.font(12))
+                .font(Theme.mono(11))
                 .foregroundStyle(Theme.graphite)
             }
         }
-        .padding(16)
+        .gardenCard()
     }
 
     private var ownerSection: some View {
@@ -322,9 +319,11 @@ struct MenuRootView: View {
                 .foregroundStyle(Theme.graphite)
             SecureField("Owner key", text: $ownerDraft)
                 .textFieldStyle(.plain)
-                .font(Theme.font(12))
-                .padding(8)
-                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.hair, lineWidth: 1))
+                .font(Theme.font(13))
+                .padding(.horizontal, 12)
+                .frame(minHeight: 36)
+                .background(Theme.card)
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.hair, lineWidth: 1))
             QuietButton(title: "Save in Keychain") {
                 if model.saveOwnerKey(ownerDraft) {
                     ownerDraft = ""
@@ -334,26 +333,7 @@ struct MenuRootView: View {
                 }
             }
         }
-        .padding(16)
-    }
-
-    private var bar: some View {
-        HStack {
-            Text("> menu")
-                .foregroundStyle(Theme.paper)
-            Rectangle()
-                .fill(Theme.teal)
-                .frame(width: 8, height: 12)
-            Spacer()
-        }
-        .font(Theme.font(10, weight: .medium))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Theme.ink)
-    }
-
-    private var hairline: some View {
-        Theme.hair.frame(height: 1)
+        .gardenCard()
     }
 
     private var dateLabel: String {
@@ -365,7 +345,7 @@ struct MenuRootView: View {
 
     private func label(_ text: String) -> some View {
         Text(text.uppercased())
-            .font(Theme.font(10, weight: .medium))
+            .font(Theme.mono(11, weight: .medium))
             .tracking(0.8)
             .foregroundStyle(Theme.stone)
     }
@@ -383,14 +363,16 @@ struct QuietButton: View {
     var action: () -> Void
 
     var body: some View {
+        // A pill. The filled one is the one ink button of the panel. The others are white with a hair edge.
         Button(action: action) {
             Text(title)
-                .font(Theme.font(12, weight: .medium))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .font(Theme.font(13, weight: .medium))
+                .frame(maxWidth: .infinity, minHeight: 32)
                 .foregroundStyle(filled ? Theme.paper : Theme.ink)
                 .background(filled ? Theme.ink : Theme.card)
-                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.ink, lineWidth: 1))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(filled ? Color.clear : Theme.hair, lineWidth: 1))
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
     }

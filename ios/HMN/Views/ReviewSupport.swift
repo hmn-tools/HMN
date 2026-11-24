@@ -96,11 +96,3 @@ struct SmallLabel: View {
     }
 }
 
-/** The card of the app, with its content in one column. The name is from the first design. */
-struct InkCard<Content: View>: View {
-    @ViewBuilder var content: Content
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) { content }
-            .card()
-    }
-}

@@ -41,6 +41,7 @@ struct ListsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                if !loaded { LoadingState() }
                 if loaded && lists.isEmpty {
                     Text("No lists yet.").font(Theme.font(14)).foregroundStyle(Theme.graphite).padding(.top, 12)
                 }

@@ -149,9 +149,14 @@ struct Stripe: View {
     }
 }
 
-/** The ground of each screen. The name is from the first design, which had ruled paper. */
-struct RuledPaper: View {
-    var body: some View { Theme.ground }
+/** A screen that waits for its first answer. One quiet spinner, in place of an empty card. */
+struct LoadingState: View {
+    var body: some View {
+        ProgressView()
+            .tint(Theme.stone)
+            .frame(maxWidth: .infinity, minHeight: 120)
+            .accessibilityLabel("Loading")
+    }
 }
 
 extension View {

@@ -717,6 +717,7 @@ One row of a section:
 | `badge` | text, optional | A short mark, such as the badge of a fixture. |
 | `date_mark` | text, optional | The day of the month, for a row with the glyph `date`. |
 | `accent` | text, optional | `teal` for a row that the app shows in teal. |
+| `type` | text, optional | The type of the row's entity, such as `task` or `event`, so that a tap can open it. Absent when the row is not an entity, such as a month of the yearly review. |
 <!-- /format:item -->
 
 ## Workers

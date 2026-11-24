@@ -22,6 +22,9 @@
 		MM0000000000000000000125 /* IBMPlexMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000124 /* IBMPlexMono-Medium.ttf */; };
 		MM0000000000000000000127 /* IBMPlexMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000126 /* IBMPlexMono-Regular.ttf */; };
 		MM0000000000000000000129 /* IBMPlexMono-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000128 /* IBMPlexMono-SemiBold.ttf */; };
+		MM0000000000000000000137 /* IBMPlexSans-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000136 /* IBMPlexSans-Medium.ttf */; };
+		MM0000000000000000000139 /* IBMPlexSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000138 /* IBMPlexSans-Regular.ttf */; };
+		MM0000000000000000000141 /* IBMPlexSans-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000140 /* IBMPlexSans-SemiBold.ttf */; };
 		MM0000000000000000000135 /* MenuLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000134 /* MenuLogicTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -43,6 +46,9 @@
 		MM0000000000000000000124 /* IBMPlexMono-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexMono-Medium.ttf; sourceTree = "<group>"; };
 		MM0000000000000000000126 /* IBMPlexMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexMono-Regular.ttf; sourceTree = "<group>"; };
 		MM0000000000000000000128 /* IBMPlexMono-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexMono-SemiBold.ttf; sourceTree = "<group>"; };
+		MM0000000000000000000136 /* IBMPlexSans-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexSans-Medium.ttf; sourceTree = "<group>"; };
+		MM0000000000000000000138 /* IBMPlexSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexSans-Regular.ttf; sourceTree = "<group>"; };
+		MM0000000000000000000140 /* IBMPlexSans-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexSans-SemiBold.ttf; sourceTree = "<group>"; };
 		MM0000000000000000000130 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		MM0000000000000000000132 /* HMNMenu.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HMNMenu.entitlements; sourceTree = "<group>"; };
 		MM0000000000000000000134 /* MenuLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuLogicTests.swift; sourceTree = "<group>"; };
@@ -101,6 +107,9 @@
 				MM0000000000000000000124 /* IBMPlexMono-Medium.ttf */,
 				MM0000000000000000000126 /* IBMPlexMono-Regular.ttf */,
 				MM0000000000000000000128 /* IBMPlexMono-SemiBold.ttf */,
+				MM0000000000000000000136 /* IBMPlexSans-Medium.ttf */,
+				MM0000000000000000000138 /* IBMPlexSans-Regular.ttf */,
+				MM0000000000000000000140 /* IBMPlexSans-SemiBold.ttf */,
 			);
 			name = Fonts;
 			path = Fonts;
@@ -154,6 +163,9 @@
 				MM0000000000000000000125 /* IBMPlexMono-Medium.ttf in Resources */,
 				MM0000000000000000000127 /* IBMPlexMono-Regular.ttf in Resources */,
 				MM0000000000000000000129 /* IBMPlexMono-SemiBold.ttf in Resources */,
+				MM0000000000000000000137 /* IBMPlexSans-Medium.ttf in Resources */,
+				MM0000000000000000000139 /* IBMPlexSans-Regular.ttf in Resources */,
+				MM0000000000000000000141 /* IBMPlexSans-SemiBold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
