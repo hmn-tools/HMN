@@ -1,0 +1,64 @@
+name: mac
+
+on:
+  pull_request:
+  push:
+
+# The token of a run can read the code and do nothing else.
+permissions:
+  contents: read
+
+jobs:
+  layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install layout and admin API
+        run: sh deploy/test/layout.test.sh
+      - name: Install Bun
+        run: curl -fsSL https://bun.sh/install | bash -s "bun-v1.2.21"
+      - name: Admin routes
+        working-directory: server
+        run: "$HOME/.bun/bin/bun test test/admin.test.ts"
+
+  install:
+    # A real install on a Mac: the Keychain, launchd, the first boot, the plugin
+    # sandbox under launchd, and a purge. The runner is thrown away afterwards.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.2.21
+      - name: Make a keychain for the test
+        run: |
+          keychain="$RUNNER_TEMP/hmn-test.keychain-db"
+          security create-keychain -p "" "$keychain"
+          security set-keychain-settings "$keychain"
+          security unlock-keychain -p "" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          security default-keychain -d user -s "$keychain"
+      - name: Layout tests on a Mac
+        run: sh deploy/test/layout.test.sh
+      - name: Install, use, and purge HMN
+        env:
+          HMN_TEST_REAL_INSTALL: "1"
+        run: sh deploy/test/install.mac.test.sh
+
+  menu:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build and test the menu bar app
+        run: |
+          xcodebuild \
+            -project mac/HMNMenu.xcodeproj \
+            -scheme HMNMenu \
+            -destination 'platform=macOS' \
+            -configuration Debug \
+            test \
+            CODE_SIGN_STYLE=Manual \
+            "CODE_SIGN_IDENTITY=-" \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM= \
+            ENABLE_HARDENED_RUNTIME=NO

@@ -1,0 +1,23 @@
+services:
+  hmn:
+    build: .
+    ports:
+      # Only this machine. Another machine reaches HMN through Tailscale or a tunnel that you choose.
+      - "127.0.0.1:8787:8787"
+    environment:
+      HMN_DATA_DIR: /data
+      # A container has no zone of its own. Set HMN_TZ to your zone, for example Europe/London.
+      HMN_TZ: ${HMN_TZ:-UTC}
+      HMN_KEK_FILE: /run/secrets/hmn_kek
+    volumes:
+      - hmn-data:/data
+    secrets:
+      - hmn_kek
+    restart: unless-stopped
+
+secrets:
+  hmn_kek:
+    file: ${HMN_KEK_FILE_HOST:-./kek.secret}
+
+volumes:
+  hmn-data:

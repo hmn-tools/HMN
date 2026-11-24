@@ -1,0 +1,9 @@
+HMN created a new graph. Write these down. They will not be shown again.
+owner   (write, up to private)  hmn_owner
+agent   (propose, up to personal) hmn_agent
+display (read, public only)     hmn_display
+recovery passphrase (write this on paper, it is not in the data directory in the clear):
+  amber-basin-cedar-delta-ember-flint-grove-harbor-ivory-juniper-kelp-linen-maple
+certificate fingerprint abcdef1234
+ca certificate /tmp/hmn/tls/ca.crt
+HMN listening on https://0.0.0.0:8787

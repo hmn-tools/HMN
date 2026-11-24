@@ -1,0 +1,4 @@
+HMN opened an existing graph. Secrets stay wrapped.
+certificate fingerprint abcdef1234
+ca certificate /tmp/hmn/tls/ca.crt
+HMN listening on https://0.0.0.0:8787

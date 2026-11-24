@@ -1,0 +1,313 @@
+import LocalAuthentication
+import SwiftUI
+
+struct AgentsView: View {
+    @EnvironmentObject private var session: Session
+    @State private var proposals: [Proposal] = []
+    @State private var message: String?
+    @State private var editing = false
+    @State private var title = ""
+    @State private var due = ""
+    @State private var reason = ""
+    @State private var linkTo = ""
+    @State private var linkRel = "about"
+    @State private var loaded = false
+    @State private var working = false
+    @State private var decided: Decided?
+
+    /// The last decision on this screen.
+    private struct Decided {
+        var id: String
+        var title: String
+        var approved: Bool
+    }
+
+    private var current: Proposal? { proposals.first }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Review").font(Theme.title).tracking(-0.6)
+                    Spacer()
+                    SmallLabel(text: waitingLabel)
+                }
+                .padding(.horizontal, 4)
+                if let proposal = current, proposal.redacted {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SmallLabel(text: "\(proposal.agentName) · Sealed")
+                        Text("Sealed").font(Theme.heading)
+                        Button("Open the vault") { Task { await openVault() } }
+                            .buttonStyle(PillButtonStyle())
+                    }
+                    .card(padding: 20)
+                } else if let proposal = current {
+                    proposalCard(proposal)
+                    HStack(spacing: 10) {
+                        Button("Decline") { Task { await decide(proposal, approve: false) } }
+                            .buttonStyle(PillButtonStyle(kind: .secondary))
+                        Button("Approve") { Task { await decide(proposal, approve: true) } }
+                            .buttonStyle(PillButtonStyle())
+                    }
+                    .disabled(working)
+                } else if loaded {
+                    EmptyState(title: "All clear.", text: "A new proposal shows here.")
+                } else {
+                    ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+                }
+                if let decided { decidedLine(decided) }
+                if let message { MessageLine(text: message, isError: true) }
+                HStack {
+                    if let proposal = current, !proposal.redacted {
+                        Button("Edit first") {
+                            title = proposal.payload?.entity?.title ?? ""
+                            due = proposal.payload?.entity?.dueAt ?? ""
+                            reason = proposal.reason ?? ""
+                            editing = true
+                        }
+                        .buttonStyle(TextButtonStyle())
+                    }
+                    Spacer()
+                    // The queue stays one proposal at a time. A long queue from one source can be read as a list.
+                    ForEach(groups, id: \.source) { group in
+                        NavigationLink("Review all \(group.count)") {
+                            BatchView(source: group.source, name: group.name)
+                        }
+                        .buttonStyle(TextButtonStyle())
+                        .accessibilityLabel("Review all \(group.count) from \(group.name)")
+                    }
+                }
+                .padding(.horizontal, 4)
+                HStack(spacing: 24) {
+                    NavigationLink("Activity") { ActivityView() }
+                    NavigationLink("Rules") { RulesView() }
+                    Spacer()
+                }
+                .buttonStyle(TextButtonStyle())
+                .padding(.horizontal, 4)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
+            .padding(.bottom, 16)
+        }
+        .background(Theme.ground.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear { Task { await reload() } }
+        .refreshable { await reload() }
+        .sheet(isPresented: $editing) { editSheet.themed() }
+    }
+
+    private var waitingLabel: String {
+        current == nil ? "Nothing waiting" : "\(proposals.count) waiting"
+    }
+
+    /** Each source that has two or more waiting proposals, in the order of the queue. */
+    private var groups: [(source: String, name: String, count: Int)] {
+        var order: [String] = []
+        var names: [String: String] = [:]
+        var counts: [String: Int] = [:]
+        for proposal in proposals {
+            guard let source = proposal.source else { continue }
+            if counts[source] == nil { order.append(source); names[source] = proposal.agentName }
+            counts[source, default: 0] += 1
+        }
+        return order.filter { (counts[$0] ?? 0) > 1 }.map { (source: $0, name: names[$0] ?? $0, count: counts[$0] ?? 0) }
+    }
+
+    /// "Trip helper · new task", "Trip helper · change", "Trip helper · removal", "Trip helper · link".
+    private func headline(_ proposal: Proposal) -> String {
+        switch proposal.op {
+        case "create": return "\(proposal.agentName) · new \(proposal.payload?.entity?.type ?? "item")"
+        case "update": return "\(proposal.agentName) · change"
+        case "delete": return "\(proposal.agentName) · removal"
+        default: return "\(proposal.agentName) · link"
+        }
+    }
+
+    private func proposalCard(_ proposal: Proposal) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                SmallLabel(text: headline(proposal))
+                Spacer()
+                SmallLabel(text: ReviewText.shortDate(proposal.createdAt))
+            }
+            Text(proposal.summary?.title ?? proposal.payload?.entity?.title ?? ReviewText.operation(proposal.op).capitalized)
+                .font(Theme.heading)
+                .tracking(-0.4)
+            // The server says what an approval writes: the item, and each field that changes.
+            if let summary = proposal.summary {
+                ForEach(Array(summary.lines.enumerated()), id: \.offset) { _, line in
+                    labeled(line.label) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(line.text).font(Theme.text)
+                            if let was = line.was {
+                                Text("Was: \(was)").font(Theme.small).foregroundStyle(Theme.stone)
+                            }
+                        }
+                    }
+                }
+                if let warning = summary.warning {
+                    Text(warning)
+                        .font(Theme.sans(14, weight: .semibold))
+                        .foregroundStyle(Theme.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else if let due = proposal.payload?.entity?.dueAt {
+                labeled("Due") { Text(due).font(Theme.text) }
+            }
+            if proposal.summary == nil, let links = proposal.payload?.links, !links.isEmpty {
+                labeled("Links") {
+                    HStack(spacing: 6) {
+                        ForEach(Array(links.enumerated()), id: \.offset) { _, link in
+                            Text(link.toId ?? "").font(Theme.small)
+                                .padding(.horizontal, 10).padding(.vertical, 3)
+                                .background(link.toType == "person" ? Theme.tealTint : Theme.ground)
+                                .foregroundStyle(link.toType == "person" ? Theme.tealDark : Theme.ink)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+            if let reason = proposal.reason {
+                labeled("Why") { Text(reason).font(Theme.text).foregroundStyle(Theme.graphite) }
+            }
+            if let summary = proposal.readSet?.summary {
+                labeled("Read") { Text(summary).font(Theme.text).foregroundStyle(Theme.graphite) }
+            }
+            if let journalId = proposal.readSet?.journalId {
+                NavigationLink("Journal") { JournalView(id: journalId) }
+                    .buttonStyle(TextButtonStyle())
+            }
+        }
+        .card(padding: 18)
+    }
+
+    private func labeled<Value: View>(_ label: String, @ViewBuilder value: () -> Value) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            SmallLabel(text: label).frame(width: 66, alignment: .leading)
+            value()
+        }
+    }
+
+    /// The result of the last decision. An approval can be taken back here.
+    private func decidedLine(_ item: Decided) -> some View {
+        HStack(spacing: 12) {
+            Text("\(item.approved ? "Approved" : "Declined"): \(item.title)").font(Theme.text).lineLimit(1)
+            Spacer(minLength: 0)
+            if item.approved {
+                Button("Undo") { Task { await undo(item) } }
+                    .font(Theme.sans(13, weight: .semibold))
+                    .foregroundStyle(Theme.tealDark)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 44)
+                    .background(Theme.card)
+                    .clipShape(Capsule())
+            }
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, item.approved ? 4 : 18)
+        .frame(minHeight: 52)
+        .background(Theme.tealTint)
+        .clipShape(Capsule())
+    }
+
+    private var editSheet: some View {
+        NavigationStack {
+            Form {
+                TextField("Title", text: $title)
+                TextField("Due", text: $due)
+                TextField("Reason", text: $reason)
+            }
+            .scrollContentBackground(.hidden)
+            .navigationTitle("Edit first")
+            .background(Theme.ground.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { editing = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { Task { await saveEdit() } }
+                }
+            }
+        }
+    }
+
+    private func reload() async {
+        do {
+            proposals = try await session.client().proposals().filter { $0.status == "pending" }
+            message = nil
+        } catch is URLError {
+            message = "Your HMN did not answer."
+        } catch {
+            message = error.localizedDescription
+        }
+        loaded = true
+    }
+
+    private func undo(_ item: Decided) async {
+        do {
+            try await session.client().undo(item.id)
+            decided = nil
+            await reload()
+            await session.refreshToday()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func openVault() async {
+        let context = LAContext()
+        do {
+            let ok: Bool = try await withCheckedThrowingContinuation { continuation in
+                context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Open the vault") { success, error in
+                    if let error { continuation.resume(throwing: error) }
+                    else { continuation.resume(returning: success) }
+                }
+            }
+            guard ok else { return }
+            let issued = try await session.client().mintGrant()
+            session.grant = issued.grant
+            await reload()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func decide(_ proposal: Proposal, approve: Bool) async {
+        // One decision at a time, so that a second tap does not decide the next proposal.
+        guard !working else { return }
+        working = true
+        defer { working = false }
+        do {
+            if approve { _ = try await session.client().approve(proposal.id) }
+            else { _ = try await session.client().reject(proposal.id) }
+            decided = Decided(id: proposal.id, title: proposal.summary?.title ?? proposal.payload?.entity?.title ?? ReviewText.operation(proposal.op), approved: approve)
+            await reload()
+            await session.refreshToday()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func saveEdit() async {
+        guard let proposal = current else { return }
+        do {
+            var links = proposal.payload?.links?.map { ["rel": $0.rel ?? "about", "to_type": $0.toType ?? "", "to_id": $0.toId ?? ""] } ?? []
+            if !linkTo.isEmpty { links.append(["rel": linkRel, "to_type": "note", "to_id": linkTo]) }
+            _ = try await session.client().editProposal(proposal.id, title: title, due: due, reason: reason, links: links)
+            editing = false
+            await reload()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+}
+
+/** The older name of the pill button. `filled` is the primary button, and the other is the secondary one. */
+struct InkButtonStyle: ButtonStyle {
+    var filled: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        PillButtonStyle(kind: filled ? .primary : .secondary).makeBody(configuration: configuration)
+    }
+}

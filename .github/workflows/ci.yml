@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# The token of a run can read the code and do nothing else.
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.2.21
+      - name: Install the plugin sandbox
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+      - name: Test the server
+        working-directory: server
+        run: bun test
+
+  server-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.2.21
+      - name: Test the server on macOS, with the plugin child under sandbox-exec
+        working-directory: server
+        run: bun test
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build for the iOS simulator without signing
+        run: >
+          xcodebuild
+          -project ios/HMN.xcodeproj
+          -scheme HMN
+          -destination 'generic/platform=iOS Simulator'
+          -sdk iphonesimulator
+          -derivedDataPath build/ios
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+          CODE_SIGN_IDENTITY=
+          CODE_SIGN_ENTITLEMENTS=
+          build
+      - name: Check that the build made the three executables
+        # A project with no compile step also reports BUILD SUCCEEDED. The files prove that Swift was compiled.
+        run: |
+          app=build/ios/Build/Products/Debug-iphonesimulator/HMN.app
+          test -f "$app/HMN"
+          test -f "$app/PlugIns/HMNWidget.appex/HMNWidget"
+          test -f "$app/PlugIns/HMNShare.appex/HMNShare"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$app/Info.plist"

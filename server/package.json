@@ -1,0 +1,12 @@
+{
+  "name": "hmn-server",
+  "version": "0.2.1",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "test": "bun test",
+    "mcp": "bun src/stdio.ts"
+  }
+}

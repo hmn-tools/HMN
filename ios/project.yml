@@ -1,0 +1,67 @@
+name: HMN
+options:
+  bundleIdPrefix: org.hmn
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  MARKETING_VERSION: "0.2.0"
+  CURRENT_PROJECT_VERSION: "2"
+  DEVELOPMENT_TEAM: ""
+  CODE_SIGN_STYLE: Automatic
+  SWIFT_VERSION: "5.0"
+targets:
+  HMN:
+    type: application
+    platform: iOS
+    sources:
+      - path: HMN
+        excludes:
+          - Info.plist
+          - HMN.entitlements
+      - path: Shared
+      - path: InboxKit
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: org.hmn
+      INFOPLIST_FILE: HMN/Info.plist
+      CODE_SIGN_ENTITLEMENTS: HMN/HMN.entitlements
+      TARGETED_DEVICE_FAMILY: "1"
+      GENERATE_INFOPLIST_FILE: NO
+    dependencies:
+      - target: HMNWidget
+        embed: true
+      - target: HMNShare
+        embed: true
+  HMNWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: HMNWidget
+        excludes:
+          - Info.plist
+          - HMNWidget.entitlements
+      - path: HMN/Fonts
+      - path: Shared
+      - path: InboxKit
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: org.hmn.widget
+      INFOPLIST_FILE: HMNWidget/Info.plist
+      CODE_SIGN_ENTITLEMENTS: HMNWidget/HMNWidget.entitlements
+      GENERATE_INFOPLIST_FILE: NO
+      SKIP_INSTALL: YES
+  HMNShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: HMNShare
+        excludes:
+          - Info.plist
+          - HMNShare.entitlements
+      - path: InboxKit
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: org.hmn.share
+      INFOPLIST_FILE: HMNShare/Info.plist
+      CODE_SIGN_ENTITLEMENTS: HMNShare/HMNShare.entitlements
+      GENERATE_INFOPLIST_FILE: NO
+      APPLICATION_EXTENSION_API_ONLY: YES
+      SKIP_INSTALL: YES

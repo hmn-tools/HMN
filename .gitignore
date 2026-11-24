@@ -1,0 +1,15 @@
+.DS_Store
+data/
+server/data/
+**/*.sqlite
+**/*.sqlite.enc
+**/*.hmn
+kek.secret
+**/*.dev
+node_modules/
+DerivedData/
+ios/build/
+mac/build/
+*.xcuserstate
+xcuserdata/
+.cursor/

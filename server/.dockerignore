@@ -1,0 +1,12 @@
+# Nothing secret goes into an image layer.
+kek.secret
+*.secret
+data
+data/
+*.dev
+*.enc
+*.hmn
+*.wrap
+mirror
+node_modules
+.env*

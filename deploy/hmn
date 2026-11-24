@@ -1,0 +1,303 @@
+#!/bin/sh
+# One command for the owner: install, check, start, stop, pair, and update HMN.
+# It calls the other scripts in this folder. See docs/MAC-MINI.md.
+set -eu
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+# shellcheck disable=SC1091
+. "$root/deploy/lib.sh"
+
+command=${1:-help}
+if [ $# -gt 0 ]; then
+  shift
+fi
+
+prefix=${HMN_PREFIX:-$HOME}
+support="$prefix/Library/Application Support/HMN"
+manifest="$support/install.manifest"
+label=org.hmn.server
+domain=gui
+plist="$prefix/Library/LaunchAgents/$label.plist"
+data_dir="$support/data"
+log="$prefix/Library/Logs/HMN/server.log"
+port=8787
+if [ -f "$manifest" ]; then
+  label=$(hmn_manifest_get "$manifest" label)
+  domain=$(hmn_manifest_get "$manifest" domain)
+  plist=$(hmn_manifest_get "$manifest" plist)
+  data_dir=$(hmn_manifest_get "$manifest" data_dir)
+  log=$(hmn_manifest_get "$manifest" log)
+  value=$(hmn_manifest_get "$manifest" port)
+  if [ -n "$value" ]; then
+    port=$value
+  fi
+fi
+base="https://127.0.0.1:$port"
+ca="$data_dir/tls/ca.crt"
+
+need_install() {
+  if [ ! -f "$plist" ]; then
+    echo "HMN is not installed on this Mac. Run deploy/hmn install." >&2
+    exit 1
+  fi
+}
+
+launchd_target() {
+  if [ "$domain" = "system" ]; then
+    if [ "$(id -u)" -ne 0 ]; then
+      echo "This install runs as a dedicated user. Use sudo for this command." >&2
+      exit 1
+    fi
+    launchd_domain=system
+  else
+    launchd_domain="gui/$(id -u)"
+  fi
+  target="$launchd_domain/$label"
+}
+
+start_job() {
+  if launchctl print "$target" >/dev/null 2>&1; then
+    launchctl kickstart "$target" || true
+  else
+    launchctl bootstrap "$launchd_domain" "$plist"
+    launchctl enable "$target" || true
+  fi
+}
+
+# Stops the job and waits until the server is gone. The server gets TERM, saves
+# the graph, and removes its working copy. launchd kills it after 20 seconds.
+stop_job() {
+  launchctl bootout "$target" >/dev/null 2>&1 || true
+  left=25
+  while [ "$left" -gt 0 ]; do
+    if ! launchctl print "$target" >/dev/null 2>&1 && ! hmn_port_busy "$port"; then
+      return 0
+    fi
+    left=$((left - 1))
+    sleep 1
+  done
+  echo "The server did not stop in 25 seconds." >&2
+  exit 1
+}
+
+report_health() {
+  if hmn_wait_health "$base" "$ca" "$1"; then
+    echo "The server answers on $base."
+  else
+    echo "The server does not answer on $base. Look at deploy/hmn logs." >&2
+    exit 1
+  fi
+}
+
+case "$command" in
+  install)
+    exec sh "$root/deploy/install.sh" "$@"
+    ;;
+  uninstall)
+    exec sh "$root/deploy/uninstall.sh" "$@"
+    ;;
+  status)
+    exec sh "$root/deploy/doctor.sh" "$@"
+    ;;
+  start)
+    need_install
+    launchd_target
+    start_job
+    report_health 30
+    ;;
+  stop)
+    need_install
+    launchd_target
+    stop_job
+    echo "The server is stopped. It starts again at the next login, or with deploy/hmn start."
+    ;;
+  restart)
+    need_install
+    launchd_target
+    # A stop and a start. "kickstart -k" kills the server before it can save.
+    stop_job
+    start_job
+    report_health 30
+    ;;
+  logs)
+    if [ ! -f "$log" ]; then
+      echo "There is no log at $log yet." >&2
+      exit 1
+    fi
+    if [ "${1:-}" = "-f" ]; then
+      exec tail -n 40 -f "$log"
+    fi
+    tail -n 40 "$log"
+    ;;
+  pair)
+    need_install
+    if ! hmn_health "$base" "$ca"; then
+      echo "The server does not answer on $base. Run deploy/hmn start." >&2
+      exit 1
+    fi
+    # A pairing code makes a phone that reads Private data, so the server asks for the owner key.
+    # The key goes to curl on standard input. It is not on a command line, where other programs can read it.
+    owner_key=$(security find-generic-password -s hmn.owner -a hmn -w 2>/dev/null || true)
+    if [ -z "$owner_key" ]; then
+      echo "The Keychain of this user does not have hmn.owner, so this command cannot ask for a pairing code." >&2
+      echo "Use Pair a phone in the menu bar app. It asks for the owner key one time." >&2
+      exit 1
+    fi
+    reply=$(printf 'Authorization: Bearer %s\n' "$owner_key" | curl -fsS --max-time 5 --cacert "$ca" -H @- -X POST "$base/api/v1/pairing") || reply=""
+    owner_key=""
+    code=$(printf '%s' "$reply" | sed -n 's/.*"code":"\([^"]*\)".*/\1/p')
+    if [ -z "$code" ]; then
+      echo "The server did not give a pairing code." >&2
+      exit 1
+    fi
+    fingerprint=$(hmn_cert_fingerprint "$data_dir/tls/server.crt")
+    echo "Type these three values into Settings in the iPhone app."
+    echo "  Pairing code: $code"
+    echo "  Certificate fingerprint: $fingerprint"
+    found=0
+    for interface in en0 en1; do
+      address=$(ipconfig getifaddr "$interface" 2>/dev/null || true)
+      if [ -n "$address" ]; then
+        echo "  Server URL on this network: https://$address:$port"
+        found=1
+      fi
+    done
+    if command -v tailscale >/dev/null 2>&1; then
+      address=$(tailscale ip -4 2>/dev/null | head -n 1 || true)
+      if [ -n "$address" ]; then
+        echo "  Server URL on Tailscale: https://$address:$port"
+        found=1
+      fi
+    fi
+    if [ "$found" -eq 0 ]; then
+      echo "  Server URL: https://<the address of this Mac>:$port"
+    fi
+    echo "The code works one time. It stops after 10 minutes."
+    ;;
+  passphrase)
+    if ! hmn_interactive; then
+      echo "The recovery passphrase is shown only to a person at a terminal." >&2
+      echo "Open Terminal and run deploy/hmn passphrase there." >&2
+      exit 1
+    fi
+    words=$(security find-generic-password -s hmn.backup -a hmn -w 2>/dev/null || true)
+    if [ -z "$words" ]; then
+      echo "The Keychain does not have hmn.backup." >&2
+      exit 1
+    fi
+    hmn_show_secret "This is the recovery passphrase: 13 words with hyphens between them." "$words"
+    words=""
+    echo "Keep the paper away from the Mac and away from the backup folder."
+    ;;
+  restore)
+    need_install
+    file=${1:-}
+    if [ -z "$file" ] || [ ! -f "$file" ]; then
+      echo "Give the backup file: deploy/hmn restore <file> [--replace]" >&2
+      exit 1
+    fi
+    if ! hmn_interactive; then
+      echo "The restore asks for the paper passphrase. Run it in Terminal." >&2
+      exit 1
+    fi
+    server_dir=$(hmn_manifest_get "$manifest" server_dir)
+    server_dir=${server_dir:-$root/server}
+    bun_path=$(hmn_pick_bun "$HOME" 0 "$(command -v bun || true)")
+    launchd_target
+    stop_job
+    shift
+    ( cd "$server_dir" && HMN_DATA_DIR="$data_dir" "$bun_path" src/restore.ts --backup "$file" --data-dir "$data_dir" "$@" ) || {
+      echo "The restore did not finish. The server is stopped. Run deploy/hmn start to start it as it was." >&2
+      exit 1
+    }
+    start_job
+    report_health 30
+    ;;
+  rotate-keys)
+    need_install
+    owner_key=$(security find-generic-password -s hmn.owner -a hmn -w 2>/dev/null || true)
+    if [ -z "$owner_key" ]; then
+      echo "The Keychain of this user does not have hmn.owner." >&2
+      exit 1
+    fi
+    reply=$(printf 'Authorization: Bearer %s\n' "$owner_key" | curl -fsS --max-time 30 --cacert "$ca" -H @- -X POST "$base/api/v1/admin/rotate-keys") || reply=""
+    owner_key=""
+    case "$reply" in
+      *'"rotated"'*) echo "The graph has a new database key. Older backups still open with the paper passphrase." ;;
+      *) echo "The server did not rotate the key." >&2; exit 1 ;;
+    esac
+    ;;
+  renew-cert)
+    need_install
+    server_dir=$(hmn_manifest_get "$manifest" server_dir)
+    server_dir=${server_dir:-$root/server}
+    bun_path=$(hmn_pick_bun "$HOME" 0 "$(command -v bun || true)")
+    launchd_target
+    stop_job
+    reply=$( cd "$server_dir" && HMN_DATA_DIR="$data_dir" "$bun_path" src/renew-cert.ts --data-dir "$data_dir" ) || {
+      echo "The certificate was not renewed. The server is stopped. Run deploy/hmn start." >&2
+      exit 1
+    }
+    fingerprint=$(printf '%s' "$reply" | sed -n 's/^certificate fingerprint \([0-9a-f]*\)$/\1/p')
+    menu_file="$support/menu.json"
+    if [ -n "$fingerprint" ] && [ -f "$menu_file" ]; then
+      # The menu bar app pins the certificate too.
+      sed -i '' "s/\"fingerprint\": \"[0-9a-fA-F]*\"/\"fingerprint\": \"$fingerprint\"/" "$menu_file"
+    fi
+    start_job
+    report_health 30
+    echo "The new certificate fingerprint: $fingerprint"
+    echo "Type it into Settings on each phone. Until then, each phone refuses the server."
+    ;;
+  renew-owner)
+    need_install
+    owner_key=$(security find-generic-password -s hmn.owner -a hmn -w 2>/dev/null || true)
+    if [ -z "$owner_key" ]; then
+      echo "The Keychain of this user does not have hmn.owner." >&2
+      exit 1
+    fi
+    reply=$(printf 'Authorization: Bearer %s\n' "$owner_key" | curl -fsS --max-time 10 --cacert "$ca" -H @- -X POST "$base/api/v1/owner/renew") || reply=""
+    owner_key=""
+    secret=$(printf '%s' "$reply" | sed -n 's/.*"secret":"\([^"]*\)".*/\1/p')
+    ends=$(printf '%s' "$reply" | sed -n 's/.*"expires_at":"\([^"]*\)".*/\1/p')
+    if [ -z "$secret" ]; then
+      echo "The server did not renew the owner key. It renews a key up to 30 days after its end." >&2
+      exit 1
+    fi
+    if ! security add-generic-password -s hmn.owner -a hmn -w "$secret" -U; then
+      secret=""
+      echo "The server made a new owner key, and the Keychain did not take it. Restore with deploy/hmn restore, or ask for help." >&2
+      exit 1
+    fi
+    secret=""
+    echo "The owner key has a new secret in the Keychain. It ends on $ends."
+    ;;
+  update)
+    need_install
+    # The install runs again with the options of the first install.
+    if [ "$domain" = "system" ]; then
+      if [ "$(id -u)" -ne 0 ]; then
+        echo "This install runs as a dedicated user. Use sudo for this command." >&2
+        exit 1
+      fi
+      set -- --dedicated-user "$@"
+    fi
+    if grep -q 'HMN_LLM_URL' "$plist"; then
+      set -- --local-llm "$@"
+    fi
+    # Show what comes in before it runs. Read it: the update runs this code on the mini.
+    git -C "$root" fetch --quiet
+    echo "The update brings these commits:"
+    git -C "$root" log --oneline "HEAD..@{u}" || true
+    git -C "$root" diff --stat "HEAD..@{u}" | tail -n 1 || true
+    git -C "$root" pull --ff-only
+    exec sh "$root/deploy/install.sh" "$@"
+    ;;
+  help|-h|--help)
+    hmn_command_help
+    ;;
+  *)
+    echo "Unknown command: $command" >&2
+    hmn_command_help >&2
+    exit 1
+    ;;
+esac

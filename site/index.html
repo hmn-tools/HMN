@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HMN: your whole life in one quiet place</title>
+<meta name="description" content="HMN keeps your whole life in one private place, on your own Mac. One calm screen shows what needs you today. Agents propose, and you decide.">
+<meta property="og:title" content="HMN: your whole life in one quiet place">
+<meta property="og:description" content="HMN keeps your whole life in one private place, on your own Mac. One calm screen shows what needs you today. Agents propose, and you decide.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="img/mark.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="HMN, the first page"><svg viewBox="0 0 120 120" aria-hidden="true"><path d="M49.00,52.00 L49.00,72.00 A11 11 0 0 0 71.00,72.00 L71.00,52.00 A11 11 0 0 0 49.00,52.00ZM62.94,61.56 L103.12,49.19 A5.5 5.5 0 0 0 101.03,38.45 L59.15,42.04 A10 10 0 0 0 62.94,61.56ZM60.85,42.04 L18.97,38.45 A5.5 5.5 0 0 0 16.88,49.19 L57.06,61.56 A10 10 0 0 0 60.85,42.04ZM52.82,79.67 L83.53,108.40 A6 6 0 0 0 92.56,100.61 L68.64,66.03 A10.5 10.5 0 0 0 52.82,79.67ZM51.36,66.03 L27.44,100.61 A6 6 0 0 0 36.47,108.40 L67.18,79.67 A10.5 10.5 0 0 0 51.36,66.03Z"/><circle cx="60" cy="19" r="12"/></svg>HMN</a>
+    <nav class="nav" aria-label="Pages">
+      <a href="docs.html">Docs</a>
+      <a href="https://github.com/hmn-tools/HMN">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<div class="hero">
+  <div class="wrap">
+    <div class="hero-copy">
+      <span class="chip">Pre-release</span>
+      <h1>Your whole life in one quiet place.</h1>
+      <div class="stripe" aria-hidden="true"><i></i><i></i><i></i></div>
+      <p class="lede">Your tasks are in one app, your calendar is in another, and the school dates are in a chat. No agent can help with a life that it cannot see. HMN puts it all in one place on your Mac, and your agent works across all of it, inside privacy limits that you set.</p>
+      <div class="cta">
+        <a class="btn primary" href="docs.html">Get started</a>
+        <a class="text-link" href="https://github.com/hmn-tools/HMN">See the source</a>
+      </div>
+    </div>
+    <div>
+      <div class="wall">
+        <figure class="eink"><div class="frame"><img src="img/display-upcoming.png" width="800" height="480" alt="A shared e-ink display. It shows what is coming up: a football match and a race."></div></figure>
+        <figure class="phone"><div class="frame"><img src="img/phone-today.webp" width="1179" height="2556" alt="The Today screen of the iPhone app. It greets Alex and shows three cards: four things due today, two family dates, and a task that has been quiet for 21 days."></div></figure>
+      </div>
+      <p class="wall-note">The same day on two screens. The phone shows all of it. The kitchen display shows only what a visitor may see.</p>
+    </div>
+  </div>
+</div>
+
+<div class="measure">
+  <div class="wrap">
+    <p class="say">Look once, know what needs you, and get on with your day.</p>
+    <a class="text-link" href="https://github.com/hmn-tools/HMN/blob/main/docs/PHILOSOPHY.md">Read the philosophy</a>
+  </div>
+</div>
+
+<div class="rules">
+  <div class="wrap">
+    <section class="panel" id="demo">
+      <div class="panel-head">
+        <p class="label">Privacy</p>
+        <h2>Your agent plans your week. It does not see your health notes.</h2>
+      </div>
+      <div class="panel-view">
+        <div class="demo">
+          <div class="readers" role="group" aria-label="Reader">
+            <button type="button" id="reader-display" data-reader="display" aria-pressed="false">Shared display</button>
+            <button type="button" id="reader-widget" data-reader="widget" aria-pressed="false">Widget</button>
+            <button type="button" id="reader-phone" data-reader="phone" aria-pressed="false">Unlocked phone</button>
+            <button type="button" id="reader-vault" data-reader="vault" aria-pressed="false">Vault</button>
+            <button type="button" id="reader-agent" data-reader="agent" aria-pressed="true">Agent</button>
+            <button type="button" id="reader-guest" data-reader="guest" aria-pressed="false">Guest</button>
+          </div>
+          <div class="rows" id="demo-rows">
+            <div class="row" data-tier="0"><span>Lakeside Grand Prix</span><span class="tier public">Public</span></div>
+            <div class="row" data-tier="0"><span>Harbour City v Northfield</span><span class="tier public">Public</span></div>
+            <div class="row" data-tier="1"><span>Send weekly notes</span><span class="tier personal">Personal</span></div>
+            <div class="row" data-tier="1"><span>Coupe insurance, ends 30/11</span><span class="tier personal">Personal</span></div>
+            <div class="row absent" data-tier="2"><span>Pay the school trip deposit</span><span class="tier private">Private</span></div>
+            <div class="row absent" data-tier="2"><span>Yves · school concert</span><span class="tier private">Private</span></div>
+            <div class="row absent" data-tier="2"><span>Sam · birthday dinner</span><span class="tier private">Private</span></div>
+            <div class="row absent" data-tier="3"><span>Dec trip, passport note</span><span class="tier sealed">Sealed</span></div>
+            <div class="row absent" data-tier="3"><span>Blood test results</span><span class="tier sealed">Sealed</span></div>
+            <div class="row absent" data-tier="3"><span>Mortgage renewal offer</span><span class="tier sealed">Sealed</span></div>
+          </div>
+          <div class="demo-foot" aria-live="polite">
+            <span id="demo-count">&gt; 4 of 10 rows</span>
+            <span id="demo-ceiling">Ceiling: Personal</span>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">Each screen and each agent has a limit. The server holds that limit, and it does not trust a model to behave. Select a reader.</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <p class="label">Agents</p>
+        <h2>Agents propose. You decide.</h2>
+      </div>
+      <div class="panel-view">
+        <div class="cut" style="--ratio: 1000 / 975; --top: -29%"><img src="img/phone-proposal.webp" width="1179" height="2556" loading="lazy" alt="A part of the Review screen of the iPhone app. A card from the key home-helper shows one proposed task, Renew the coupe insurance, with its due date, its area, its tier, its links, the reason, and what the agent read. Below the card are the buttons Decline and Approve."></div>
+      </div>
+      <p class="panel-note">Here an agent read a note and saw that the car insurance ends this month. It prepared the task and gave its reason. Nothing changes until you approve, and you can undo it.</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <p class="label">Calm</p>
+        <h2>A screen that you can leave.</h2>
+      </div>
+      <div class="panel-view">
+        <figure class="eink"><div class="frame"><img src="img/display-upcoming.png" width="800" height="480" loading="lazy" alt="The image for a shared e-ink display. It shows the next two things to watch."></div></figure>
+      </div>
+      <p class="panel-note">Today shows what needs you, and then it ends. There is nothing below it to scroll.</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <p class="label">Yours</p>
+        <h2>It lives at home, on your own Mac.</h2>
+      </div>
+      <div class="panel-view">
+        <div class="cut" style="--ratio: 1000 / 680; --top: -29%"><img src="img/phone-asleep.webp" width="1179" height="2556" loading="lazy" alt="A part of the Today screen when the server does not answer. A small figure lies on its side with three letters z. The card says: Your HMN is sleeping. This phone cannot reach it now. A button says Knock again."></div>
+      </div>
+      <p class="panel-note">There is no account and no subscription. Change your agent or your phone, and your life stays where it is. When the Mac sleeps, the phone tells you.</p>
+    </section>
+  </div>
+</div>
+
+</main>
+
+<div class="end">
+  <div class="close">
+    <div class="wrap">
+      <div>
+        <h2>Four commands on a Mac that you own.</h2>
+        <p>HMN works with the agent that you use now. It is open source.</p>
+      </div>
+      <a class="btn light" href="docs.html">Read the docs</a>
+    </div>
+  </div>
+  <footer class="foot">
+    <div class="wrap"><div>
+      <span class="said">&gt; Tools for humans<span class="cursor" aria-hidden="true"></span></span>
+      <nav aria-label="Links"><a href="docs.html">Docs</a><a href="https://github.com/hmn-tools/HMN">Source</a><a href="https://github.com/hmn-tools/HMN/blob/main/LICENSE">Apache-2.0</a></nav>
+    </div></div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var TIERS = ["Public", "Personal", "Private", "Sealed"];
+  var CEILING = { display: 0, widget: 1, phone: 2, vault: 3, agent: 1, guest: 0 };
+  var rows = [].slice.call(document.querySelectorAll("#demo-rows .row"));
+  var buttons = [].slice.call(document.querySelectorAll(".readers button"));
+  var count = document.getElementById("demo-count");
+  var ceiling = document.getElementById("demo-ceiling");
+
+  function show(id) {
+    if (!(id in CEILING)) return;
+    var seen = 0;
+    rows.forEach(function (row) {
+      var absent = Number(row.getAttribute("data-tier")) > CEILING[id];
+      row.classList.toggle("back", !absent && row.classList.contains("absent"));
+      row.classList.toggle("absent", absent);
+      if (!absent) seen += 1;
+    });
+    buttons.forEach(function (button) {
+      button.setAttribute("aria-pressed", button.getAttribute("data-reader") === id ? "true" : "false");
+    });
+    count.textContent = "> " + seen + " of " + rows.length + " rows";
+    ceiling.textContent = "Ceiling: " + TIERS[CEILING[id]];
+  }
+  buttons.forEach(function (button) {
+    button.addEventListener("click", function () { show(button.getAttribute("data-reader")); });
+  });
+  show("agent");
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HMN docs</title>
+<meta name="description" content="How to install HMN on a Mac, pair an iPhone, and connect an agent.">
+<meta property="og:title" content="HMN docs">
+<meta property="og:description" content="How to install HMN on a Mac, pair an iPhone, and connect an agent.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="img/mark.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="HMN, the first page"><svg viewBox="0 0 120 120" aria-hidden="true"><path d="M49.00,52.00 L49.00,72.00 A11 11 0 0 0 71.00,72.00 L71.00,52.00 A11 11 0 0 0 49.00,52.00ZM62.94,61.56 L103.12,49.19 A5.5 5.5 0 0 0 101.03,38.45 L59.15,42.04 A10 10 0 0 0 62.94,61.56ZM60.85,42.04 L18.97,38.45 A5.5 5.5 0 0 0 16.88,49.19 L57.06,61.56 A10 10 0 0 0 60.85,42.04ZM52.82,79.67 L83.53,108.40 A6 6 0 0 0 92.56,100.61 L68.64,66.03 A10.5 10.5 0 0 0 52.82,79.67ZM51.36,66.03 L27.44,100.61 A6 6 0 0 0 36.47,108.40 L67.18,79.67 A10.5 10.5 0 0 0 51.36,66.03Z"/><circle cx="60" cy="19" r="12"/></svg>HMN</a>
+    <nav class="nav" aria-label="Pages">
+      <a href="docs.html" aria-current="page">Docs</a>
+      <a href="https://github.com/hmn-tools/HMN">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main class="doc">
+  <div class="wrap">
+    <header class="doc-head">
+      <p class="label">Docs</p>
+      <h1>Run HMN on your Mac.</h1>
+      <p>Install the server, pair your phone, and connect an agent. Each section ends with a link to the full document in the repository.</p>
+    </header>
+
+    <details class="toc" id="toc" open>
+      <summary>On this page</summary>
+      <nav aria-label="On this page">
+        <div>
+          <p class="label">Start</p>
+          <ul>
+            <li><a href="#start">Before you start</a></li>
+            <li><a href="#install">Install on a Mac</a></li>
+            <li><a href="#passphrase">The recovery passphrase</a></li>
+            <li><a href="#commands">Daily commands</a></li>
+            <li><a href="#iphone">The iPhone app</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="label">The two rules</p>
+          <ul>
+            <li><a href="#tiers">Tiers and readers</a></li>
+            <li><a href="#proposals">Proposals</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="label">Agents</p>
+          <ul>
+            <li><a href="#agent">Connect an agent</a></li>
+            <li><a href="#keys">A key for each agent</a></li>
+            <li><a href="#contract">The proposal contract</a></li>
+            <li><a href="#remote">An agent away from your Mac</a></li>
+            <li><a href="#guest">A guest</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="label">Sources and screens</p>
+          <ul>
+            <li><a href="#calendars">Calendars</a></li>
+            <li><a href="#workers">Workers and models</a></li>
+            <li><a href="#display">A shared display</a></li>
+            <li><a href="#away">The phone away from home</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="label">Care</p>
+          <ul>
+            <li><a href="#backups">Backups</a></li>
+            <li><a href="#security">Security</a></li>
+            <li><a href="#update">Update and uninstall</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="label">Reference</p>
+          <ul>
+            <li><a href="#trial">Try it with no install</a></li>
+            <li><a href="#limits">What is not built</a></li>
+            <li><a href="#documents">All documents</a></li>
+          </ul>
+        </div>
+      </nav>
+    </details>
+
+    <div class="doc-body">
+
+    <section id="start">
+      <h2>Before you start</h2>
+      <ul class="points">
+        <li>A Mac with macOS 14 or later.</li>
+        <li>FileVault is on. The encryption of the database is not a substitute for it.</li>
+        <li><code>git</code>. The install adds <a href="https://bun.sh">Bun</a> if it is not there. The server has no npm dependencies.</li>
+        <li>A stable folder for the repository, for example <code>~/hmn</code>. The install refuses a cloud folder, and it refuses Desktop, Documents, and Downloads.</li>
+      </ul>
+      <div class="note">
+        <p class="label">Status</p>
+        <p>HMN is not released. One person builds it for personal use. No second person has reviewed the security design. Do not rely on the encryption until that review is done.</p>
+      </div>
+    </section>
+
+    <section id="install">
+      <h2>Install on a Mac</h2>
+      <div class="term"><pre id="cmd-install">git clone https://github.com/hmn-tools/HMN.git ~/hmn
+cd ~/hmn
+deploy/hmn install --empty
+deploy/hmn status</pre><button type="button" id="copy-install" data-copy="cmd-install">Copy</button></div>
+      <ul class="points">
+        <li><code>--empty</code> starts a graph for your own data.</li>
+        <li><code>--demo</code> starts with a fictional demonstration, for a test. You cannot remove the demonstration later as a whole.</li>
+        <li>The keys go into your login Keychain. The install does not write a key into a file or the log.</li>
+        <li>The server starts when you log in, from launchd. It listens with TLS on port 8787.</li>
+        <li>Do not open port 8787 on your router. Use your home network, or Tailscale, when the phone is away.</li>
+        <li>You can run the install again. A second run restarts the server. It keeps the graph and the keys.</li>
+      </ul>
+      <p class="more">Full document: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/MAC-MINI.md">docs/MAC-MINI.md</a></p>
+    </section>
+
+    <section id="passphrase">
+      <h2>The recovery passphrase</h2>
+      <p>The install shows a recovery passphrase of 13 words, once, to a person at a terminal. Write it on paper. A restore on a Mac that does not have your Keychain needs it.</p>
+      <p>The install does not show the words if an agent, a script, or a pipe runs it. Then open Terminal yourself and run this command:</p>
+      <div class="term"><pre id="cmd-passphrase">deploy/hmn passphrase</pre><button type="button" id="copy-passphrase" data-copy="cmd-passphrase">Copy</button></div>
+      <p>Keep the paper away from the backup files. A backup together with the passphrase restores the graph.</p>
+    </section>
+
+    <section id="commands">
+      <h2>Daily commands</h2>
+      <div class="tbl"><table>
+        <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>deploy/hmn status</code></td><td>Runs the health check. It reads the Keychain items, the launchd job, FileVault, the certificate, and the age of the newest backup.</td></tr>
+          <tr><td><code>deploy/hmn start</code>, <code>stop</code>, <code>restart</code></td><td>Controls the launchd job, then says if the server answers.</td></tr>
+          <tr><td><code>deploy/hmn logs</code></td><td>Shows the end of the server log. <code>-f</code> follows it.</td></tr>
+          <tr><td><code>deploy/hmn pair</code></td><td>Makes a pairing code for the iPhone app.</td></tr>
+          <tr><td><code>deploy/hmn passphrase</code></td><td>Shows the recovery passphrase to a person at a terminal.</td></tr>
+          <tr><td><code>deploy/hmn update</code></td><td>Gets the new source, then runs the install again.</td></tr>
+          <tr><td><code>deploy/hmn uninstall</code></td><td>Removes the launchd job. The data and the keys stay.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>The menu bar app</h3>
+      <p>Open <code>mac/HMNMenu.xcodeproj</code> in Xcode and run HMNMenu. It needs no Apple team. The menu shows if the server answers, and it has these items:</p>
+      <ul class="points">
+        <li>Start, Stop, and Restart.</li>
+        <li>Hide. Each paired phone drops to Public. Nothing is deleted. Show my things clears it.</li>
+        <li>Pair a phone, with a code and a QR code.</li>
+        <li>Phones, with Revoke.</li>
+        <li>Back up, and Restore.</li>
+        <li>Activity. It lists each Private and Sealed read, with no title.</li>
+      </ul>
+      <p class="more">The server log is <code>~/Library/Logs/HMN/server.log</code>.</p>
+    </section>
+
+    <section id="iphone">
+      <h2>The iPhone app</h2>
+      <p>There is no App Store build. You build the app from the source.</p>
+      <ol class="steps">
+        <li>Open <code>ios/HMN.xcodeproj</code> in Xcode, select your team, and run the app on your phone.</li>
+        <li>On the Mac, run <code>deploy/hmn pair</code>. It prints a pairing code, the certificate fingerprint, and the server address.</li>
+        <li>In the app, tap the mark and type the three values into Settings. Tap Pair this phone.</li>
+      </ol>
+      <ul class="points">
+        <li>The code works one time, and it ends after ten minutes.</li>
+        <li>The phone stores its key in the Keychain. It accepts only the certificate with that fingerprint.</li>
+        <li>Do not copy the owner key onto the phone. Pair the phone.</li>
+        <li>Capture goes to one inbox: the plus button, the share sheet, Siri, and the shortcut "Add to HMN".</li>
+      </ul>
+      <p>The app was run in the simulator. It was not run on a real iPhone.</p>
+      <p class="more">Full documents: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/RUNNING.md">docs/RUNNING.md</a>, <a href="https://github.com/hmn-tools/HMN/blob/main/docs/SHORTCUTS.md">docs/SHORTCUTS.md</a>, <a href="https://github.com/hmn-tools/HMN/blob/main/docs/TESTFLIGHT.md">docs/TESTFLIGHT.md</a></p>
+    </section>
+
+    <section id="tiers">
+      <h2>Tiers and readers</h2>
+      <p>Each row has a tier. Each reader has a ceiling. A row above the ceiling of a reader is absent for that reader. It is not blanked. One policy layer decides this for the phone, the widget, the display, and each agent.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Tier</th><th>Where it can show</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tier public">Public</span></td><td>A shared display, a lock screen, a widget, and the phone. For example, the start time of a race.</td></tr>
+          <tr><td><span class="tier personal">Personal</span></td><td>The default. Your phone and your widgets. Not the shared display, and not the lock screen.</td></tr>
+          <tr><td><span class="tier private">Private</span></td><td>The phone, only after you unlock it. For example, a family date.</td></tr>
+          <tr><td><span class="tier sealed">Sealed</span></td><td>Hidden until you open the vault on the phone. For example, a health note or a passport note.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Reader</th><th>Ceiling</th></tr></thead>
+        <tbody>
+          <tr><td>Shared display, lock screen</td><td>Public</td></tr>
+          <tr><td>Widget</td><td>Personal</td></tr>
+          <tr><td>Unlocked phone</td><td>Private</td></tr>
+          <tr><td>Vault on the phone, after Face ID or the passcode</td><td>Sealed, for five minutes</td></tr>
+          <tr><td>Agent key</td><td>Personal. Private only while your grant for that one key is open. Never Sealed.</td></tr>
+          <tr><td>Guest</td><td>Public</td></tr>
+        </tbody>
+      </table></div>
+      <p>Hide on a phone drops that phone to Public until you clear it. Hide deletes nothing.</p>
+      <p class="more">Full document: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/PRODUCT.md">docs/PRODUCT.md</a></p>
+    </section>
+
+    <section id="proposals">
+      <h2>Proposals</h2>
+      <p>Software cannot write. A worker, a plugin, an import, or an agent files a proposal. The Agents screen on the phone shows one proposal at a time, with the change, the reason, and the buttons Decline and Approve. Nothing is saved before you approve.</p>
+      <ul class="points">
+        <li>Review is the default.</li>
+        <li>You can set a rule for one worker or one plugin: Review, Auto, or Deny.</li>
+        <li>Four things always wait for you: a delete, a change to a tier or an area, Sealed data, and an outside agent. No rule changes these.</li>
+        <li>Activity lists each decided proposal. You can undo an accepted change there.</li>
+        <li>A decline leaves no trace in the graph.</li>
+      </ul>
+      <p class="more">Full document: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/UX.md">docs/UX.md</a></p>
+    </section>
+
+    <section id="agent">
+      <h2>Connect an agent</h2>
+      <p>HMN is a store. It is not an agent, and it has no chat. Your agent connects to it with MCP. On the same Mac, the MCP client starts a small program that is a pipe to the running server. The agent key is in the Keychain, so the command needs only the address of the certificate.</p>
+      <h3>Claude Code</h3>
+      <div class="term"><pre id="cmd-agent">claude mcp add hmn -- bun ~/hmn/server/src/stdio.ts \
+  --ca "$HOME/Library/Application Support/HMN/data/tls/ca.crt"</pre><button type="button" id="copy-agent" data-copy="cmd-agent">Copy</button></div>
+      <h3>Claude Desktop</h3>
+      <p>Put this in <code>claude_desktop_config.json</code>. Use absolute addresses, and replace <code>you</code> with your user name.</p>
+      <div class="term"><pre id="cmd-desktop">{
+  "mcpServers": {
+    "hmn": {
+      "command": "bun",
+      "args": [
+        "/Users/you/hmn/server/src/stdio.ts",
+        "--ca",
+        "/Users/you/Library/Application Support/HMN/data/tls/ca.crt"
+      ]
+    }
+  }
+}</pre><button type="button" id="copy-desktop" data-copy="cmd-desktop">Copy</button></div>
+      <p>The settings for OpenClaw and OpenJarvis are in the full document. They were not run against HMN.</p>
+      <h3>The tools</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Tool</th><th>Use</th></tr></thead>
+        <tbody>
+          <tr><td><code>search</code></td><td>Reads. Finds entities by words, best match first.</td></tr>
+          <tr><td><code>get_entity</code>, <code>list_entities</code></td><td>Reads. One entity, or each entity of one type.</td></tr>
+          <tr><td><code>list_links</code>, <code>neighbours</code></td><td>Reads. The links of one entity, and the entities around it, out to three links.</td></tr>
+          <tr><td><code>list_proposals</code>, <code>proposal_status</code></td><td>Reads. The proposals that the key can see, and the state of one proposal.</td></tr>
+          <tr><td><code>free_busy</code></td><td>Reads. The times in which you are busy, with no title. It is in the list only when you allow it for the key.</td></tr>
+          <tr><td><code>propose_create</code>, <code>propose_update</code>, <code>propose_delete</code>, <code>propose_link</code></td><td>Proposes. You decide.</td></tr>
+          <tr><td><code>capture_inbox</code></td><td>Proposes. Puts text in your inbox.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>What an agent cannot do</h3>
+      <ul class="points">
+        <li>Read above the ceiling of its key.</li>
+        <li>Read an area with the role health or money, with the default agent key.</li>
+        <li>Approve a proposal, or write an entity or a link.</li>
+        <li>Be accepted with no review. Only a worker or a plugin inside HMN can have an Auto rule.</li>
+      </ul>
+      <p>An agent sends what it reads to its own model. HMN cannot take that text back. The ceiling of the key is the control that you keep.</p>
+      <p class="more">Full document: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/CONNECT-AN-AGENT.md">docs/CONNECT-AN-AGENT.md</a></p>
+    </section>
+
+    <section id="keys">
+      <h2>A key for each agent</h2>
+      <p>Give each agent its own key. Each key has its own limits, its own read log, its own approval rules, and its own revoke. You can stop one agent and leave the others.</p>
+      <div class="shots">
+        <figure class="phone"><div class="frame"><img src="img/phone-keys.webp" width="1179" height="2556" loading="lazy" alt="The Agent keys screen of the iPhone app. It lists six keys, among them the agent keys agent, home-helper, and research, and the view key display, each with its ceiling, its end date, and a Revoke control."></div><figcaption>Settings, Agent keys</figcaption></figure>
+        <figure class="phone"><div class="frame"><img src="img/phone-private.webp" width="1179" height="2556" loading="lazy" alt="The Give Private screen of the iPhone app. It says that Private adds 9 rows, shows examples, lists what stays closed, and gives three warnings before the button."></div><figcaption>The preview before a Private grant</figcaption></figure>
+      </div>
+      <ul class="points">
+        <li>Make a key on the phone, in Settings, Agent keys. The phone does not receive the key. The server puts it in the Keychain of the Mac as <code>hmn.agent.&lt;name&gt;</code>.</li>
+        <li>Start that agent with <code>--key-name &lt;name&gt;</code> after <code>stdio.ts</code>.</li>
+        <li>A view, such as a display or a widget, gets a view key. A view key reads Public rows, and it cannot propose.</li>
+        <li>A new key reads up to Personal, or up to Public. It ends after 90 days, unless you set a different time.</li>
+        <li>Areas with the role health or money are closed for a key, unless you open that role for the key.</li>
+        <li>The log shows what each key read: each search with its words, and each entity.</li>
+      </ul>
+      <h3>Private for a time</h3>
+      <p>You can give one key the Private tier, for at most 90 days. First you see a preview of the rows that this adds, from your real graph. When the grant ends, the key reads at Personal again, and it still works. No key reads Sealed.</p>
+      <h3>Busy times</h3>
+      <p>A key can get the times in which you are busy, with no title and no other detail. This needs two switches, and both are off at the start: one on the calendar, in Settings, Calendars, and one on the key, in Settings, Agent keys. One call covers at most 60 days.</p>
+    </section>
+
+    <section id="contract">
+      <h2>The proposal contract</h2>
+      <p>This section is for a person who builds an agent. The contract is the public interface of HMN for a write. A plugin inside HMN and an agent outside use the same contract.</p>
+      <div class="tbl wide"><table>
+        <thead><tr><th>Part</th><th>Who sets it</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td>Source</td><td>The server</td><td><code>key:&lt;credential id&gt;</code> for an agent. An agent cannot name its own source. The approval rules use it.</td></tr>
+          <tr><td>External id</td><td>The agent</td><td>The id of the record in the other system, in <code>entity.external_id</code>. A later run can find the entity with it.</td></tr>
+          <tr><td>Idempotency key</td><td>The agent</td><td>The same key from the same source returns the first proposal. Send it on each retry.</td></tr>
+          <tr><td>Tier</td><td>The server</td><td>The strictest tier of the rows that the proposal touches. The agent can ask for a stricter tier. It cannot ask for a more visible one.</td></tr>
+        </tbody>
+      </table></div>
+      <p>A proposal is <code>pending</code>, then <code>approved</code>, <code>rejected</code>, <code>expired</code>, or <code>undone</code>.</p>
+      <div class="term"><pre id="cmd-propose">{
+  "entity": {
+    "type": "task",
+    "title": "Renew the parking permit",
+    "status": "open",
+    "kind": "task",
+    "due_at": "2026-12-01",
+    "external_id": "mail-4411"
+  },
+  "reason": "A message from the council asks for the renewal by 1 December.",
+  "idempotency_key": "mail-4411:create"
+}</pre><button type="button" id="copy-propose" data-copy="cmd-propose">Copy</button></div>
+      <ol class="steps">
+        <li>Send an idempotency key with each proposal. A good key is the id in the other system and the operation.</li>
+        <li>Read <code>proposal_status</code> before a new run proposes the same thing with a new key.</li>
+        <li>Take a decline as a no. Do not propose the item again with a new key.</li>
+        <li>Give one clear reason. The owner reads it on the phone.</li>
+      </ol>
+      <p class="more">Full documents: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/CONNECT-AN-AGENT.md">docs/CONNECT-AN-AGENT.md</a>, <a href="https://github.com/hmn-tools/HMN/blob/main/docs/SCHEMA.md">docs/SCHEMA.md</a></p>
+    </section>
+
+    <section id="remote">
+      <h2>An agent away from your Mac</h2>
+      <p>An agent that does not run on your Mac uses a second port. The port is off until you turn it on, and it needs two switches.</p>
+      <ol class="steps">
+        <li>Start the server with <code>HMN_EXTERNAL_MCP=1</code>. This binds port 8788.</li>
+        <li>Switch the gate on, in the menu bar app on the Mac. The same switch is the kill switch.</li>
+      </ol>
+      <ul class="points">
+        <li>Port 8788 serves <code>/external/mcp</code> and the OAuth discovery documents. It does not serve the admin API, the phone API, or the display.</li>
+        <li>The cap is Personal, or Public if you choose that for the client. Sealed is refused for each client.</li>
+        <li>The tools read and propose. There is no approve tool.</li>
+        <li>Each client has a limit of 60 calls in 10 minutes. A token ends after 30 days.</li>
+        <li>To reach it from the internet, use Tailscale Funnel on port 8788 only. Do not publish port 8787.</li>
+      </ul>
+      <p class="more">Full document: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/EXTERNAL-AGENTS.md">docs/EXTERNAL-AGENTS.md</a></p>
+    </section>
+
+    <section id="guest">
+      <h2>A guest</h2>
+      <p>A guest is the agent of another person, for example a friend who wants to find a time to meet. It is an outside client with three limits.</p>
+      <ul class="points">
+        <li>It reads Public only.</li>
+        <li>It can propose a new event, or leave a short text in your inbox. It cannot propose a change, a removal, or a link.</li>
+        <li>Each proposal waits for you. No rule accepts it.</li>
+      </ul>
+      <p>With busy times on, the guest reads the times in which you are busy, proposes an event in a free hour, and reads the status until you decide. After an approval, the guest learns that you approved. It cannot read the event. Revoke the guest after the meeting is set.</p>
+    </section>
+
+    <section id="calendars">
+      <h2>Calendars</h2>
+      <p>HMN reads the ICS address of a calendar every 15 minutes. The calendar stays the source of truth. HMN does not write back.</p>
+      <ul class="points">
+        <li>Add a calendar on the phone, in Settings, Calendars.</li>
+        <li>For Google Calendar, use the "Secret address in iCal format" of the calendar.</li>
+        <li>Each calendar has its own tier.</li>
+        <li>A mirrored event is accepted with no review, unless you set that calendar to Review.</li>
+        <li>The address is a secret. HMN does not show it in a response or in an error.</li>
+        <li>Set a calendar that another person controls to Review, or to a tier above the shared display.</li>
+      </ul>
+      <p class="more">Full document: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/RUNNING.md">docs/RUNNING.md</a></p>
+    </section>
+
+    <section id="workers">
+      <h2>Workers and models</h2>
+      <p>Six small jobs run on your Mac. Each one reads through the policy layer and files proposals. No worker reads Sealed rows, and no worker can approve.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Worker</th><th>What it proposes</th></tr></thead>
+        <tbody>
+          <tr><td>Morning</td><td>The focus line of Today, and the first three items.</td></tr>
+          <tr><td>Week</td><td>The weekly review.</td></tr>
+          <tr><td>Triage</td><td>A task, a person, or a link, from a note in the inbox.</td></tr>
+          <tr><td>People</td><td>A birthday, an anniversary, or a note that it has been a while.</td></tr>
+          <tr><td>Fixtures</td><td>A "What to watch" note, with no results.</td></tr>
+          <tr><td>Goals</td><td>One next step.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Three ways to run a worker</h3>
+      <ul class="points">
+        <li><b>No model.</b> This is the default. The worker uses fixed rules, and it opens no connection.</li>
+        <li><b>A local model.</b> <code>deploy/hmn install --local-llm</code> installs Ollama and gets one model for the memory of your Mac. The model listens on your Mac only.</li>
+        <li><b>A cloud model.</b> It is off for each worker until you turn it on for that worker, name the endpoint, choose a tier, and accept the warning. Private and Sealed rows do not go to a cloud model. A monthly cap, ten dollars at the start, stops more cloud calls.</li>
+      </ul>
+      <p>The settings screen is <code>https://127.0.0.1:8787/api/v1/workers.html</code>, on the Mac.</p>
+      <p class="more">Full documents: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/MODELS.md">docs/MODELS.md</a>, <a href="https://github.com/hmn-tools/HMN/blob/main/docs/LOCAL-MODELS.md">docs/LOCAL-MODELS.md</a></p>
+    </section>
+
+    <section id="display">
+      <h2>A shared display</h2>
+      <p>A TRMNL e-ink display on your home network can show HMN. It shows Public rows only. The server draws the image on your Mac, and it gets nothing from TRMNL.</p>
+      <figure class="eink"><div class="frame"><img src="img/display-upcoming.png" width="800" height="480" loading="lazy" alt="The image for a shared e-ink display. It shows a football match and a race that are coming up."></div></figure>
+      <ol class="steps">
+        <li>Point the display at <code>https://&lt;your Mac&gt;:8787</code>. The panel shows an id of six characters.</li>
+        <li>Claim that id on the Mac. The display gets its own key.</li>
+      </ol>
+      <p>The key of a display reads Public only. It is not the owner key. You can revoke one display and leave the others.</p>
+      <p class="more">Full document: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/TRMNL.md">docs/TRMNL.md</a></p>
+    </section>
+
+    <section id="away">
+      <h2>The phone away from home</h2>
+      <p>HMN opens no port on the router. Away from home, the phone gets to the Mac through Tailscale.</p>
+      <ol class="steps">
+        <li>Install Tailscale on the Mac and on the iPhone. Sign both into the same tailnet.</li>
+        <li>On the Mac, run <code>tailscale ip -4</code>. The server address for the phone is <code>https://&lt;that address&gt;:8787</code>.</li>
+        <li>Keep the same fingerprint in Settings. The app refuses a different certificate.</li>
+        <li>With Wi-Fi off, make sure that Today loads on the phone.</li>
+      </ol>
+      <p>Tailscale is the private network. It is not a substitute for the key or for the certificate pin. The Mac must be logged in, because the login unlocks the Keychain.</p>
+      <p class="more">Full document: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/TAILSCALE.md">docs/TAILSCALE.md</a></p>
+    </section>
+
+    <section id="backups">
+      <h2>Backups</h2>
+      <ul class="points">
+        <li>Make a backup with Back up, in the menu bar app. A backup is an encrypted file in the data folder.</li>
+        <li>Restore, in the menu bar app, replaces the graph with one backup. It asks one time.</li>
+        <li>A restore needs your Keychain, or the recovery passphrase.</li>
+        <li><code>deploy/hmn status</code> gives the age of the newest backup.</li>
+        <li>Keep a copy of the backup files on a different disk. Keep the passphrase away from them.</li>
+      </ul>
+    </section>
+
+    <section id="security">
+      <h2>Security</h2>
+      <div class="note">
+        <p class="label">Status</p>
+        <p>No second person has reviewed the security design. Do not rely on the encryption until that review is done.</p>
+      </div>
+      <h3>What the server does</h3>
+      <ul class="points">
+        <li>The database file is encrypted on the disk. Sealed fields are encrypted a second time with a separate key. The key that opens the database is in the macOS Keychain.</li>
+        <li>Each listener uses TLS. There is no HTTP port. The phone accepts only the certificate that it saw at the pairing.</li>
+        <li>A pairing code works one time, ends after ten minutes, and can be made only on the Mac.</li>
+        <li>Each key has a scope, a maximum tier, and an end date. Eight failures in ten minutes lock the source for fifteen minutes.</li>
+        <li>An audit log with a hash chain records each Private and Sealed read. The phone keeps a copy of the newest hash.</li>
+        <li>The server has no telemetry and no account.</li>
+      </ul>
+      <h3>What it does not do</h3>
+      <ul class="points">
+        <li>It does not protect against a person who is root on a running, unlocked Mac.</li>
+        <li>It cannot make sure that Face ID ran. A stolen, unlocked phone reads Private rows until you revoke it.</li>
+        <li>It cannot take back text that an agent read.</li>
+      </ul>
+      <p>If you lose a phone, revoke it in the menu bar app.</p>
+      <p class="more">Full document: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/SECURITY.md">docs/SECURITY.md</a></p>
+    </section>
+
+    <section id="update">
+      <h2>Update and uninstall</h2>
+      <div class="term"><pre id="cmd-update">deploy/hmn update</pre><button type="button" id="copy-update" data-copy="cmd-update">Copy</button></div>
+      <p>The update gets the new source and runs the install again, with the options of the first install. The server restarts.</p>
+      <div class="term"><pre id="cmd-uninstall">deploy/hmn uninstall</pre><button type="button" id="copy-uninstall" data-copy="cmd-uninstall">Copy</button></div>
+      <p>The uninstall removes the launchd job. The data folder and the Keychain items stay.</p>
+      <p><code>deploy/hmn uninstall --purge</code> also deletes the data folder, the backups in it, and the Keychain items. You cannot undo a purge. The command lists what it will delete, and it asks you to type the word <code>purge</code>.</p>
+    </section>
+
+    <section id="trial">
+      <h2>Try it with no install</h2>
+      <p>These commands start a server with the fictional demonstration in a temporary folder. They need Bun. They make no Keychain call. Do not use this for real data, because the key is in the same folder as the data.</p>
+      <div class="term"><pre id="cmd-trial">cd server
+bun test
+HMN_INSECURE_DEV_KEK=1 HMN_DATA_DIR=/tmp/hmn-trial HMN_HOST=127.0.0.1 bun src/index.ts</pre><button type="button" id="copy-trial" data-copy="cmd-trial">Copy</button></div>
+      <p>The first start prints three keys. In a second terminal, read the Today screen with the owner key:</p>
+      <div class="term"><pre id="cmd-today">curl --cacert /tmp/hmn-trial/tls/ca.crt \
+  -H "Authorization: Bearer $HMN_OWNER_KEY" -H "X-HMN-Surface: phone" \
+  https://127.0.0.1:8787/api/v1/screens/today</pre><button type="button" id="copy-today" data-copy="cmd-today">Copy</button></div>
+      <p class="more">Full document: <a href="https://github.com/hmn-tools/HMN/blob/main/docs/RUNNING.md">docs/RUNNING.md</a></p>
+    </section>
+
+    <section id="limits">
+      <h2>What is not built</h2>
+      <ul class="points">
+        <li>A release for the App Store, for Android, or for the web.</li>
+        <li>A full CalDAV client. The calendar mirror reads the ICS address of a calendar.</li>
+        <li>Push notifications. The server does not send a notification to the phone.</li>
+        <li>A sync with another system. An import from another system is one-time, and you approve each pass.</li>
+        <li>A marketplace or a plugin kit. The public interface is two contracts: read and propose. Parts of the read contract are not built.</li>
+      </ul>
+    </section>
+
+    <section id="documents">
+      <h2>All documents</h2>
+      <div class="tbl"><table>
+        <thead><tr><th>Document</th><th>What it has</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/PHILOSOPHY.md">PHILOSOPHY</a></td><td>Why HMN exists, and what a good day with it is. A working draft.</td></tr>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/DESIGN-PRINCIPLES.md">DESIGN-PRINCIPLES</a></td><td>Eleven principles, each with a design test. A working draft.</td></tr>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/PRODUCT.md">PRODUCT</a></td><td>What HMN is for, its principles, and what it will not do.</td></tr>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/STRATEGY.md">STRATEGY</a></td><td>Where HMN sits among other software, and the decisions.</td></tr>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/SECURITY.md">SECURITY</a></td><td>What is enforced, the threat model, and the risks that remain.</td></tr>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/SCHEMA.md">SCHEMA</a></td><td>The data model, the API, the MCP tools, and the rules.</td></tr>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/UX.md">UX</a></td><td>The screens and their text.</td></tr>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/CONNECT-AN-AGENT.md">CONNECT-AN-AGENT</a></td><td>How to connect an agent, and what it can rely on.</td></tr>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/EXTERNAL-AGENTS.md">EXTERNAL-AGENTS</a></td><td>An agent away from your Mac, and a guest.</td></tr>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/MAC-MINI.md">MAC-MINI</a></td><td>The install, the menu bar app, and the daily commands.</td></tr>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/RUNNING.md">RUNNING</a></td><td>A run from the source, Docker, <code>curl</code>, the first run, and the plugins.</td></tr>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/TAILSCALE.md">TAILSCALE</a>, <a href="https://github.com/hmn-tools/HMN/blob/main/docs/TRMNL.md">TRMNL</a>, <a href="https://github.com/hmn-tools/HMN/blob/main/docs/MODELS.md">MODELS</a></td><td>The phone away from home, the display, and the models.</td></tr>
+          <tr><td><a href="https://github.com/hmn-tools/HMN/blob/main/docs/ROADMAP.md">ROADMAP</a></td><td>What is built, what is open, and the order.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    </div>
+  </div>
+</main>
+<div class="end">
+  <footer class="foot">
+    <div class="wrap"><div>
+      <span class="said">&gt; Tools for humans<span class="cursor" aria-hidden="true"></span></span>
+      <nav aria-label="Links"><a href="index.html">Home</a><a href="https://github.com/hmn-tools/HMN">Source</a><a href="https://github.com/hmn-tools/HMN/blob/main/LICENSE">Apache-2.0</a></nav>
+    </div></div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  [].slice.call(document.querySelectorAll("button[data-copy]")).forEach(function (button) {
+    button.addEventListener("click", function () {
+      var source = document.getElementById(button.getAttribute("data-copy"));
+      var reset = function () { setTimeout(function () { button.textContent = "Copy"; }, 1600); };
+      var select = function () {
+        var range = document.createRange();
+        range.selectNodeContents(source);
+        var selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        button.textContent = "Selected";
+        reset();
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(source.textContent).then(function () { button.textContent = "Copied"; reset(); }, select);
+      } else {
+        select();
+      }
+    });
+  });
+
+  // The list of sections is open at the side of a wide page, and it is one closed row on a narrow page.
+  var toc = document.getElementById("toc");
+  var wide = window.matchMedia("(min-width: 941px)");
+  var fit = function () { toc.open = wide.matches; };
+  fit();
+  if (wide.addEventListener) wide.addEventListener("change", fit); else wide.addListener(fit);
+
+  var links = [].slice.call(toc.querySelectorAll('a[href^="#"]'));
+  var sections = links.map(function (link) { return document.getElementById(link.getAttribute("href").slice(1)); });
+  links.forEach(function (link) {
+    link.addEventListener("click", function () { if (!wide.matches) toc.open = false; });
+  });
+
+  // The list marks the section that is at the top of the window.
+  var waiting = false;
+  var mark = function () {
+    waiting = false;
+    var current = 0;
+    sections.forEach(function (section, index) {
+      if (section && section.getBoundingClientRect().top <= 140) current = index;
+    });
+    links.forEach(function (link, index) {
+      if (index === current) link.setAttribute("aria-current", "true"); else link.removeAttribute("aria-current");
+    });
+  };
+  window.addEventListener("scroll", function () {
+    if (!waiting) { waiting = true; window.requestAnimationFrame(mark); }
+  }, { passive: true });
+  mark();
+})();
+</script>
+</body>
+</html>

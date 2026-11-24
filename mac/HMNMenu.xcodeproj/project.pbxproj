@@ -1,0 +1,413 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		MM0000000000000000000101 /* AdminClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000100 /* AdminClient.swift */; };
+		MM0000000000000000000103 /* AdminModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000102 /* AdminModels.swift */; };
+		MM0000000000000000000105 /* CertPin.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000104 /* CertPin.swift */; };
+		MM0000000000000000000107 /* HMNMenuApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000106 /* HMNMenuApp.swift */; };
+		MM0000000000000000000109 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000108 /* KeychainStore.swift */; };
+		MM0000000000000000000111 /* MenuConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000110 /* MenuConfig.swift */; };
+		MM0000000000000000000113 /* MenuModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000112 /* MenuModel.swift */; };
+		MM0000000000000000000115 /* MenuRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000114 /* MenuRootView.swift */; };
+		MM0000000000000000000117 /* PinnedTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000116 /* PinnedTransport.swift */; };
+		MM0000000000000000000119 /* QRCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000118 /* QRCode.swift */; };
+		MM0000000000000000000121 /* ServiceControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000120 /* ServiceControl.swift */; };
+		MM0000000000000000000123 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000122 /* Theme.swift */; };
+		MM0000000000000000000125 /* IBMPlexMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000124 /* IBMPlexMono-Medium.ttf */; };
+		MM0000000000000000000127 /* IBMPlexMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000126 /* IBMPlexMono-Regular.ttf */; };
+		MM0000000000000000000129 /* IBMPlexMono-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000128 /* IBMPlexMono-SemiBold.ttf */; };
+		MM0000000000000000000135 /* MenuLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MM0000000000000000000134 /* MenuLogicTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		MM0000000000000000000010 /* HMNMenu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HMNMenu.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		MM0000000000000000000011 /* HMNMenuTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HMNMenuTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		MM0000000000000000000100 /* AdminClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminClient.swift; sourceTree = "<group>"; };
+		MM0000000000000000000102 /* AdminModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminModels.swift; sourceTree = "<group>"; };
+		MM0000000000000000000104 /* CertPin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CertPin.swift; sourceTree = "<group>"; };
+		MM0000000000000000000106 /* HMNMenuApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HMNMenuApp.swift; sourceTree = "<group>"; };
+		MM0000000000000000000108 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		MM0000000000000000000110 /* MenuConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuConfig.swift; sourceTree = "<group>"; };
+		MM0000000000000000000112 /* MenuModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuModel.swift; sourceTree = "<group>"; };
+		MM0000000000000000000114 /* MenuRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuRootView.swift; sourceTree = "<group>"; };
+		MM0000000000000000000116 /* PinnedTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedTransport.swift; sourceTree = "<group>"; };
+		MM0000000000000000000118 /* QRCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCode.swift; sourceTree = "<group>"; };
+		MM0000000000000000000120 /* ServiceControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceControl.swift; sourceTree = "<group>"; };
+		MM0000000000000000000122 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		MM0000000000000000000124 /* IBMPlexMono-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexMono-Medium.ttf; sourceTree = "<group>"; };
+		MM0000000000000000000126 /* IBMPlexMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexMono-Regular.ttf; sourceTree = "<group>"; };
+		MM0000000000000000000128 /* IBMPlexMono-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexMono-SemiBold.ttf; sourceTree = "<group>"; };
+		MM0000000000000000000130 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		MM0000000000000000000132 /* HMNMenu.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HMNMenu.entitlements; sourceTree = "<group>"; };
+		MM0000000000000000000134 /* MenuLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuLogicTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		MM0000000000000000000032 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		MM0000000000000000000034 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		MM0000000000000000000001 /* HMNMenu */ = {
+			isa = PBXGroup;
+			children = (
+				MM0000000000000000000004 /* HMNMenu */,
+				MM0000000000000000000006 /* HMNMenuTests */,
+				MM0000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		MM0000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				MM0000000000000000000010 /* HMNMenu.app */,
+				MM0000000000000000000011 /* HMNMenuTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		MM0000000000000000000004 /* HMNMenu */ = {
+			isa = PBXGroup;
+			children = (
+				MM0000000000000000000100 /* AdminClient.swift */,
+				MM0000000000000000000102 /* AdminModels.swift */,
+				MM0000000000000000000104 /* CertPin.swift */,
+				MM0000000000000000000106 /* HMNMenuApp.swift */,
+				MM0000000000000000000108 /* KeychainStore.swift */,
+				MM0000000000000000000110 /* MenuConfig.swift */,
+				MM0000000000000000000112 /* MenuModel.swift */,
+				MM0000000000000000000114 /* MenuRootView.swift */,
+				MM0000000000000000000116 /* PinnedTransport.swift */,
+				MM0000000000000000000118 /* QRCode.swift */,
+				MM0000000000000000000120 /* ServiceControl.swift */,
+				MM0000000000000000000122 /* Theme.swift */,
+				MM0000000000000000000130 /* Info.plist */,
+				MM0000000000000000000132 /* HMNMenu.entitlements */,
+				MM0000000000000000000005 /* Fonts */,
+			);
+			name = HMNMenu;
+			path = HMNMenu;
+			sourceTree = "<group>";
+		};
+		MM0000000000000000000005 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				MM0000000000000000000124 /* IBMPlexMono-Medium.ttf */,
+				MM0000000000000000000126 /* IBMPlexMono-Regular.ttf */,
+				MM0000000000000000000128 /* IBMPlexMono-SemiBold.ttf */,
+			);
+			name = Fonts;
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		MM0000000000000000000006 /* HMNMenuTests */ = {
+			isa = PBXGroup;
+			children = (
+				MM0000000000000000000134 /* MenuLogicTests.swift */,
+			);
+			name = HMNMenuTests;
+			path = HMNMenuTests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXSourcesBuildPhase section */
+		MM0000000000000000000030 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				MM0000000000000000000101 /* AdminClient.swift in Sources */,
+				MM0000000000000000000103 /* AdminModels.swift in Sources */,
+				MM0000000000000000000105 /* CertPin.swift in Sources */,
+				MM0000000000000000000107 /* HMNMenuApp.swift in Sources */,
+				MM0000000000000000000109 /* KeychainStore.swift in Sources */,
+				MM0000000000000000000111 /* MenuConfig.swift in Sources */,
+				MM0000000000000000000113 /* MenuModel.swift in Sources */,
+				MM0000000000000000000115 /* MenuRootView.swift in Sources */,
+				MM0000000000000000000117 /* PinnedTransport.swift in Sources */,
+				MM0000000000000000000119 /* QRCode.swift in Sources */,
+				MM0000000000000000000121 /* ServiceControl.swift in Sources */,
+				MM0000000000000000000123 /* Theme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		MM0000000000000000000033 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				MM0000000000000000000135 /* MenuLogicTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+/* Begin PBXResourcesBuildPhase section */
+		MM0000000000000000000031 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				MM0000000000000000000125 /* IBMPlexMono-Medium.ttf in Resources */,
+				MM0000000000000000000127 /* IBMPlexMono-Regular.ttf in Resources */,
+				MM0000000000000000000129 /* IBMPlexMono-SemiBold.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		MM0000000000000000000020 /* HMNMenu */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = MM0000000000000000000061 /* Build configuration list for PBXNativeTarget "HMNMenu" */;
+			buildPhases = (
+				MM0000000000000000000030 /* Sources */,
+				MM0000000000000000000032 /* Frameworks */,
+				MM0000000000000000000031 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HMNMenu;
+			productName = HMNMenu;
+			productReference = MM0000000000000000000010 /* HMNMenu.app */;
+			productType = "com.apple.product-type.application";
+		};
+		MM0000000000000000000021 /* HMNMenuTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = MM0000000000000000000062 /* Build configuration list for PBXNativeTarget "HMNMenuTests" */;
+			buildPhases = (
+				MM0000000000000000000033 /* Sources */,
+				MM0000000000000000000034 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				MM0000000000000000000041 /* PBXTargetDependency */,
+			);
+			name = HMNMenuTests;
+			productName = HMNMenuTests;
+			productReference = MM0000000000000000000011 /* HMNMenuTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		MM0000000000000000000050 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					MM0000000000000000000020 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					MM0000000000000000000021 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = MM0000000000000000000020;
+					};
+				};
+			};
+			buildConfigurationList = MM0000000000000000000060 /* Build configuration list for PBXProject "HMNMenu" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = MM0000000000000000000001;
+			productRefGroup = MM0000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				MM0000000000000000000020 /* HMNMenu */,
+				MM0000000000000000000021 /* HMNMenuTests */,
+			);
+		};
+/* End PBXProject section */
+/* Begin PBXContainerItemProxy section */
+		MM0000000000000000000040 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = MM0000000000000000000050 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = MM0000000000000000000020;
+			remoteInfo = HMNMenu;
+		};
+/* End PBXContainerItemProxy section */
+/* Begin PBXTargetDependency section */
+		MM0000000000000000000041 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = MM0000000000000000000020 /* HMNMenu */;
+			targetProxy = MM0000000000000000000040 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+/* Begin XCBuildConfiguration section */
+		MM0000000000000000000070 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGNING_REQUIRED = NO;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_DEBUG_DYLIB = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			}; name = Debug; };
+		MM0000000000000000000071 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGNING_REQUIRED = NO;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_DEBUG_DYLIB = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+			}; name = Release; };
+		MM0000000000000000000072 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = HMNMenu/HMNMenu.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_DEBUG_DYLIB = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HMNMenu/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.hmn.menu;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			}; name = Debug; };
+		MM0000000000000000000073 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = HMNMenu/HMNMenu.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_DEBUG_DYLIB = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HMNMenu/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.hmn.menu;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			}; name = Release; };
+		MM0000000000000000000074 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_DEBUG_DYLIB = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.hmn.menu.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HMNMenu.app/Contents/MacOS/HMNMenu";
+			}; name = Debug; };
+		MM0000000000000000000075 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_DEBUG_DYLIB = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.hmn.menu.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HMNMenu.app/Contents/MacOS/HMNMenu";
+			}; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		MM0000000000000000000060 /* Build configuration list for PBXProject "HMNMenu" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				MM0000000000000000000070 /* Debug */,
+				MM0000000000000000000071 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		MM0000000000000000000061 /* Build configuration list for PBXNativeTarget "HMNMenu" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				MM0000000000000000000072 /* Debug */,
+				MM0000000000000000000073 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		MM0000000000000000000062 /* Build configuration list for PBXNativeTarget "HMNMenuTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				MM0000000000000000000074 /* Debug */,
+				MM0000000000000000000075 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = MM0000000000000000000050 /* Project object */;
+}
+
