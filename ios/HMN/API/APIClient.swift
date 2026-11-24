@@ -219,8 +219,9 @@ final class APIClient: NSObject, URLSessionDelegate {
         if let entityId { body["entity_id"] = entityId }
         return try await sendJSON("/api/v1/inbox/\(try Path.segment(id))/process", method: "POST", surface: "phone", body: body)
     }
-    func createTask(title: String, due: String?) async throws -> Entity {
-        var body: [String: String] = ["title": title, "status": due == nil ? "inbox" : "open", "kind": "task"]
+    /// A task with no date goes to the inbox, unless the caller names a status, such as "open" for a step of a project.
+    func createTask(title: String, due: String?, status: String? = nil) async throws -> Entity {
+        var body: [String: String] = ["title": title, "status": status ?? (due == nil ? "inbox" : "open"), "kind": "task"]
         if let due { body["due_at"] = due }
         return try await send("/api/v1/task", method: "POST", surface: "phone", body: body)
     }

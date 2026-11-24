@@ -478,11 +478,7 @@ struct OpenedItem: View {
     var body: some View {
         NavigationStack {
             Group {
-                if item.type == "person" {
-                    PersonPageView(id: item.id, title: item.title)
-                } else {
-                    EntityDetailView(type: item.type ?? "task", id: item.id)
-                }
+                ItemPage(type: item.type ?? "task", id: item.id, title: item.title)
             }
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
         }

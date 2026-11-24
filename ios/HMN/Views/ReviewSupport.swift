@@ -49,15 +49,20 @@ enum ReviewText {
         return out.string(from: date)
     }
 
-    /** `2026-12-11T04:39:00.000Z` reads as `11/12/2026`. An end date needs its year. */
+    /** `2026-12-11T04:39:00.000Z` and `2026-12-11` read as `11/12/2026`. An end date needs its year. */
     static func day(_ iso: String?) -> String {
         guard let iso else { return "" }
         let parser = ISO8601DateFormatter()
         parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return iso }
         let out = DateFormatter()
         out.dateFormat = "d/M/yyyy"
-        return out.string(from: date)
+        if let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) { return out.string(from: date) }
+        // A day with no time is a day in the phone's own zone, so it is not moved by a zone offset.
+        let dayOnly = DateFormatter()
+        dayOnly.locale = Locale(identifier: "en_US_POSIX")
+        dayOnly.dateFormat = "yyyy-MM-dd"
+        if iso.count == 10, let date = dayOnly.date(from: iso) { return out.string(from: date) }
+        return iso
     }
 
     /** "1 person", "3 people", "2 tasks". */

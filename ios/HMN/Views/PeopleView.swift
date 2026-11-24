@@ -77,6 +77,8 @@ struct PersonPageView: View {
     var title: String
     @State private var page: PersonPage?
     @State private var message: String?
+    @State private var newTask = ""
+    @State private var working = false
 
     var body: some View {
         ScrollView {
@@ -90,10 +92,18 @@ struct PersonPageView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .card()
+                HStack(spacing: 8) {
+                    TextField("A task for \(firstName)", text: $newTask)
+                        .textFieldStyle(FieldStyle())
+                        .submitLabel(.done)
+                        .onSubmit { Task { await addTask() } }
+                    Button("Add") { Task { await addTask() } }
+                        .buttonStyle(ChipButtonStyle(selected: true))
+                        .disabled(newTask.trimmingCharacters(in: .whitespaces).isEmpty || working)
+                }
                 if let page {
                     if page.isEmpty {
-                        Text("Nothing linked yet. Link a task, a date, or a note to them, and it shows here.")
-                            .font(Theme.font(14)).foregroundStyle(Theme.graphite)
+                        Text("Nothing linked yet.").font(Theme.font(14)).foregroundStyle(Theme.graphite)
                     }
                     section("Next", page.next)
                     if !page.tasks.isEmpty {
@@ -133,11 +143,7 @@ struct PersonPageView: View {
             VStack(spacing: 0) {
                 ForEach(rows) { row in
                     NavigationLink {
-                        if row.entity.type == "person" {
-                            PersonPageView(id: row.entity.id, title: row.entity.title)
-                        } else {
-                            EntityDetailView(type: row.entity.type, id: row.entity.id)
-                        }
+                        ItemPage(type: row.entity.type, id: row.entity.id, title: row.entity.title)
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
@@ -229,6 +235,26 @@ struct PersonPageView: View {
             page = try await session.client().personPage(id)
             message = nil
         } catch { message = error.localizedDescription }
+    }
+
+    private var firstName: String {
+        (page?.person.title ?? title).split(separator: " ").first.map(String.init) ?? title
+    }
+
+    /// A new open task, linked with `for`: it is done for this person (ONTOLOGY.md, 2.3).
+    private func addTask() async {
+        let text = newTask.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty, !working else { return }
+        working = true
+        defer { working = false }
+        do {
+            let task = try await session.client().createTask(title: text, due: nil, status: "open")
+            try await session.client().link(fromType: "task", fromId: task.id, rel: "for", toType: "person", toId: id)
+            newTask = ""
+            await load()
+        } catch {
+            message = error.localizedDescription
+        }
     }
 
     private func complete(_ task: Entity) async {

@@ -30,6 +30,8 @@ struct SettingsView: View {
                     }
                     if let message { MessageLine(text: message, isError: true) }
                     if hidden { HiddenNote() }
+                    // Before a pairing, nothing below can load. The screen is only the pairing.
+                    if session.isPaired {
                     group("People and agents") {
                         row("Household") { HouseholdView() }
                         row("Agents and apps", last: true) { AgentsAndAppsView() }
@@ -49,6 +51,7 @@ struct SettingsView: View {
                                 BrowseView(type: type, title: type.capitalized + "s", empty: "Nothing here yet.")
                             }
                         }
+                    }
                     }
                 }
                 .padding(22)
