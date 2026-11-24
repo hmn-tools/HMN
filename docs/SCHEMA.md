@@ -518,6 +518,8 @@ The surface is `X-HMN-Surface: phone | widget | display | lock | mcp`. Display r
 | `GET /api/v1/:type/:id/links` | read, write, agent | Both directions, with a peer summary. |
 | `POST /api/v1/links` | write | Create a link. |
 | `DELETE /api/v1/links/:id` | write | Soft-delete a link. |
+| `GET /api/v1/review/year?year=` | read, write, agent | The yearly review: `year`, `greeting`, `summary`, `closing`, `sections` (as a screen), `note` (the owner's note for the year, or null), and `years` (from the first row to now, the newest first). No `year` means this year. A year after this one gets 422. |
+| `PUT /api/v1/review/year/:year/note` | write, owner | `{ body }`. Makes or changes the one Private note of the year (`properties.year_review`). A member gets 403. |
 | `GET /api/v1/people` | read, write, agent | Each person, with `line` (the kind, and the next date with them) and `organisation`. People first, by name, then organisations. |
 | `GET /api/v1/person/:id/page` | read, write, agent | The person page: `person`, `kind_title`, `organisation`, `line`, and the linked rows in `next` (events from today, at most 5), `tasks` (open), `done` (the last 14 days), `notes`, `things` (assets and places), `people`, `other`, and `routines`. Each row has `entity`, `rel`, and `when`. A row the caller cannot read is absent. |
 | `GET /api/v1/routines` | read, write, agent | Each habit that is `for` a person, with those people (`for`), its `days`, `due_today`, and `done_today`. By person, then title. |

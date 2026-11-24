@@ -18,6 +18,8 @@ struct TodayView: View {
     @State private var note: String?
     /// The task that the owner completed last, so that one tap takes it back.
     @State private var completed: ScreenItem?
+    /// The yearly review opens from the week page.
+    @State private var showYear = false
     private let deck = ["today", "upcoming", "commitments", "quiet", "week"]
     /// The sections whose rows are tasks. A row there has a circle that completes it.
     private let taskSections: Set<String> = ["due", "commitments", "slipped", "mine", "today"]
@@ -66,6 +68,7 @@ struct TodayView: View {
             if session.isMember { screenId = "home" }
             await load()
         }
+        .sheet(isPresented: $showYear) { YearReviewView().themed() }
         // The owner pairs the phone in Settings. Today reads again when that sheet closes.
         .onChange(of: session.showSettings) { _, open in
             if !open { Task { await load() } }
@@ -136,6 +139,24 @@ struct TodayView: View {
             .padding(.vertical, 6)
             .card(padding: 0)
             .opacity(asleep ? 0.6 : 1)
+        }
+        // The week page ends with the way to the year.
+        if screenId == "week" && !session.isMember {
+            Button { showYear = true } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("The year").font(Theme.row).foregroundStyle(Theme.ink)
+                        Text("What it held, and your note.").font(Theme.small).foregroundStyle(Theme.stone)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
+                }
+                .padding(.horizontal, 16)
+                .frame(minHeight: 60)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .card(padding: 0)
         }
     }
 

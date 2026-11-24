@@ -194,7 +194,7 @@ HMN keeps the **meaning** of a thing, not its **material**. The material is a st
 4. Provenance and undo for each write that is not the owner's.
 5. Safe reads for agents: grants, ceilings, and the read log.
 6. The household surfaces: the fridge, lists, and family tasks.
-7. The review: the week now, and the year next. A yearly review screen, made from the record and one note that the owner writes, is the next large feature for this role.
+7. The review: the week and the year. The yearly review screen, made from the record and one note that the owner writes, was built on 2026-11-24.
 
 ### Licence: confirmed
 

@@ -564,6 +564,17 @@ struct RoutineList: Codable {
     var routines: [Routine]
 }
 
+/// The yearly review of one calendar year, and the owner's note for it. docs/STRATEGY.md, role 7.
+struct YearReview: Codable {
+    var year: Int
+    var greeting: String
+    var summary: String
+    var closing: String
+    var sections: [ScreenSection]
+    var note: Entity?
+    var years: [Int]
+}
+
 /// A person in the People list, with one line: the relation, and the next date with them.
 struct PersonEntry: Codable, Identifiable {
     var person: Entity

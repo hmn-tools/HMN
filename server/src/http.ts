@@ -413,6 +413,13 @@ async function route(hmn: Hmn, req: Request, ip: string | null, fingerprint: str
   if (req.method === "DELETE" && pathname.startsWith("/api/v1/links/")) {
     return json(hmn.removeLink(access, decodeURIComponent(pathname.slice("/api/v1/links/".length))));
   }
+  // The yearly review, and the owner's note for a year. docs/STRATEGY.md, role 7.
+  if (req.method === "GET" && pathname === "/api/v1/review/year") {
+    const raw = url.searchParams.get("year");
+    return json(hmn.yearReview(access, raw ? Number(raw) : null));
+  }
+  const yearNote = pathname.match(/^\/api\/v1\/review\/year\/(\d{4})\/note$/);
+  if (req.method === "PUT" && yearNote) return json(hmn.saveYearNote(access, Number(yearNote[1]), await readJson(req)));
   // The people, and the person page. docs/ONTOLOGY.md, section 5.2.
   if (req.method === "GET" && pathname === "/api/v1/people") return json({ people: hmn.people(access) });
   const personPage = pathname.match(/^\/api\/v1\/person\/([^/]+)\/page$/);

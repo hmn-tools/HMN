@@ -58,6 +58,7 @@ import {
   type TodayScreen,
 } from "./screens";
 import { buildPersonPage, type PersonPage } from "./people";
+import { buildYear, yearOf } from "./year";
 import { cadenceLabel, dueOn, routineDays } from "./routines";
 import { seedDatabase, type SeedSecrets } from "./seed";
 import type { Store } from "./store";
@@ -2770,6 +2771,50 @@ export class Hmn {
     const self = [...views.values()].find((view) => view.type === "person" && view.kind !== null && selfKinds.has(view.kind));
     // The owner sees the household's Home as a partner does: every child's routines.
     return { personId: self?.id ?? null, name: self?.title ?? "you", role: PARTNER_ROLE };
+  }
+
+  /**
+   * The yearly review of one calendar year, and the owner's note for it. A year with no record still answers,
+   * with an empty card. `years` lists each year from the first row to now, the newest first.
+   */
+  yearReview(access: Access, year: number | null) {
+    const zone = zoned(this.now(), this.timeZone);
+    const current = Number(zone.dateKey.slice(0, 4));
+    const wanted = year ?? current;
+    if (!Number.isInteger(wanted) || wanted < 1970 || wanted > current) throw new ApiError(422, "year", "Pick a year up to this one.");
+    const input = this.screenInput(access);
+    const selfKinds = this.kinds().withRole("person", "self");
+    const selfIds = new Set([...input.views.values()].filter((view) => view.type === "person" && view.kind !== null && selfKinds.has(view.kind)).map((view) => view.id));
+    const review = buildYear(input, wanted, selfIds);
+    for (const id of review.entity_ids) {
+      const view = input.views.get(id);
+      if (view) this.noteRead(access, view);
+    }
+    const note = this.yearNote(input.views, wanted);
+    if (note) this.noteRead(access, note);
+    const first = [...input.views.values()].reduce((min, view) => Math.min(min, yearOf(view.created_at, this.timeZone)), current);
+    const years: number[] = [];
+    for (let y = current; y >= first; y--) years.push(y);
+    return { ...review, note, years };
+  }
+
+  /** The owner writes the note of a year. It is a Private note, and the review shows it above the record. */
+  saveYearNote(access: Access, year: number, input: Record<string, unknown>) {
+    assertScope(access, "write");
+    if (access.principal.member || access.principal.external) throw new ApiError(403, "forbidden", "Only the owner writes the note of a year.");
+    const current = Number(zoned(this.now(), this.timeZone).dateKey.slice(0, 4));
+    if (!Number.isInteger(year) || year < 1970 || year > current) throw new ApiError(422, "year", "Pick a year up to this one.");
+    const body = typeof input.body === "string" ? input.body : "";
+    const existing = this.yearNote(new Map(this.visible(access).map((view) => [view.id, view])), year);
+    if (existing) {
+      const view = this.update(access, "note", existing.id, { body });
+      return view;
+    }
+    return this.create(access, "note", { title: `The year ${year}`, body, status: "open", tier: "private", properties: { year_review: year } });
+  }
+
+  private yearNote(views: Map<string, EntityView>, year: number): EntityView | null {
+    return [...views.values()].find((view) => view.type === "note" && view.properties.year_review === year && view.status !== "archived") ?? null;
   }
 
   /** The person page: the next dates, the open tasks, the notes, and the things linked to a person. */

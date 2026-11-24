@@ -115,6 +115,12 @@ final class APIClient: NSObject, URLSessionDelegate {
     func uncheck(_ id: String) async throws -> Entity {
         try await send("/api/v1/habits/\(try Path.segment(id))/check-in", method: "DELETE", surface: "phone")
     }
+    func yearReview(_ year: Int?) async throws -> YearReview {
+        try await send("/api/v1/review/year" + (year.map { "?year=\($0)" } ?? ""), surface: "phone")
+    }
+    func saveYearNote(_ year: Int, body: String) async throws -> Entity {
+        try await send("/api/v1/review/year/\(year)/note", method: "PUT", surface: "phone", body: ["body": body])
+    }
     func people() async throws -> [PersonEntry] {
         let list: PeopleList = try await send("/api/v1/people", surface: "phone")
         return list.people

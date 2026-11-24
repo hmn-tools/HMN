@@ -312,6 +312,23 @@ Summary line, examples: "Two things done, one slipped, no project moved." Closin
 
 No charts, no comparison with last week, no "you usually".
 
+## Yearly review
+
+Built on 2026-11-24. "The year" is the last card of the week page. It opens one sheet for a calendar year. Chips at the top change the year when the record has more than one. Sections, each omitted when empty:
+
+| Section | Content |
+| --- | --- |
+| Your note | One Private note that the owner writes for the year: "What was this year for?" It sits above the record. |
+| Goals | The goals made or changed in the year, and the active goals made before its end. The status: Active, Reached, or Paused. |
+| Finished | The projects done in the year, with the month. A list is not a project here. |
+| Month by month | For each month: the things done and the family dates. A month with neither is left out. |
+| People | At most five people, by the dates and the done tasks with them or for them in the year. The owner is not one of them. |
+| Still open | The tasks added in the year that are not done, the oldest first, at most five. For a past year the label is "Carried on". |
+
+Summary line, example: "212 things done, 4 projects finished, 2 goals reached, and 31 notes." The note of the year is not counted. Closing line, always: "Write down what the year was for. Keep what matters." The title is "Your 2026 so far." in the year itself, and "Your 2025." after it.
+
+No charts, no streaks, no comparison with another year.
+
 ## Privacy lens
 
 Settings → Privacy. Four short lines, one per tier, in the words from the tier table in [PRODUCT.md](PRODUCT.md). Then the current ceiling: "This phone can see up to Private. The vault is closed." **Open vault** runs the biometric prompt. **Hide** is the same panic as on Today. There is no dashboard of other people's access, because there are no other people.
