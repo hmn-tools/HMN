@@ -65,7 +65,8 @@ post() {
       -H "Content-Type: application/json" -d "$2" "$base$1"
 }
 # How many working copies of the database are on disk. A working copy is not
-# encrypted. A server that runs has one, and a server that stopped cleanly has none.
+# encrypted. Since 2026-11-23 the server keeps it in its memory only, so there is
+# none on disk, while the server runs and after it stops.
 working_copies() {
   for dir in "$(getconf DARWIN_USER_TEMP_DIR)" /tmp; do
     ls "$dir" 2>/dev/null | grep -E '^hmn-[0-9]+-[0-9a-f]{8}\.sqlite$' || true
@@ -185,8 +186,8 @@ no_secret_in "$out"
 code=$(status_of /api/v1/screens/today)
 [ "$code" = "200" ] || fail "Today answered $code after the second install"
 
-echo "8. Stop, start, and restart. A stop is clean: no working copy stays on disk."
-[ "$(working_copies)" -eq 1 ] || fail "a server that runs has $(working_copies) working copies, not 1"
+echo "8. Stop, start, and restart. No working copy of the database is on disk at any time."
+[ "$(working_copies)" -eq 0 ] || fail "a server that runs has $(working_copies) working copies on disk, not 0"
 sh deploy/hmn stop >"$out" 2>&1 || fail "stop failed"
 if hmn_health "$base" "$ca"; then
   fail "the server answers after stop"
@@ -196,7 +197,7 @@ sh deploy/hmn start >"$out" 2>&1 || fail "start failed"
 hmn_health "$base" "$ca" || fail "the server does not answer after start"
 sh deploy/hmn restart >"$out" 2>&1 || fail "restart failed"
 hmn_health "$base" "$ca" || fail "the server does not answer after restart"
-[ "$(working_copies)" -eq 1 ] || fail "after a restart there are $(working_copies) working copies, not 1"
+[ "$(working_copies)" -eq 0 ] || fail "after a restart there are $(working_copies) working copies on disk, not 0"
 code=$(status_of /api/v1/screens/today)
 [ "$code" = "200" ] || fail "Today answered $code after the restart"
 
