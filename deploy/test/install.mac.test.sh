@@ -201,14 +201,14 @@ hmn_health "$base" "$ca" || fail "the server does not answer after restart"
 code=$(status_of /api/v1/screens/today)
 [ "$code" = "200" ] || fail "Today answered $code after the restart"
 
-echo "8b. A server that was killed leaves a copy, and the next start removes it."
+echo "8b. A server that was killed leaves no copy, and the supervisor starts it again."
 server_pid=$(pgrep -f "bun src/index.ts" | head -n 1)
 [ -n "$server_pid" ] || fail "the server process was not found"
 kill -KILL "$server_pid"
 # The supervisor starts a new server about 2 seconds later.
 sleep 4
 hmn_wait_health "$base" "$ca" 30 || fail "the server did not come back after a kill"
-[ "$(working_copies)" -eq 1 ] || fail "after a kill and a new start there are $(working_copies) working copies, not 1"
+[ "$(working_copies)" -eq 0 ] || fail "after a kill and a new start there are $(working_copies) working copies on disk, not 0"
 code=$(status_of /api/v1/screens/today)
 [ "$code" = "200" ] || fail "Today answered $code after a kill"
 
