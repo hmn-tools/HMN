@@ -46,7 +46,6 @@ A test server ran with `HMN_INSECURE_DEV_KEK=1`, its own `HMN_DATA_DIR`, `HMN_NO
 
 ## Open
 
-- The host is Vercel, project `hmn` on the personal account, with the root folder `site` and no build step. A push to `main` deploys it. `.vercelignore` keeps this file and `sample-data.ts` off the site. The domain is hmn.tools, registered on 2026-11-23.
-- The links go to the repository. They work for a visitor only after the repository is public.
+- The host is Vercel, project `hmn` on the personal account, with the root folder `site` and no build step. Since 2026-11-24 the project deploys from `hmn-tools/HMN`: a push to `main` deploys it. `.vercelignore` keeps this file and `sample-data.ts` off the site. The domain is hmn.tools, registered on 2026-11-23.
 - A social card image for a shared link.
 - Smaller font files. The six font files are TrueType, about 0.2 MB each. A WOFF2 form is smaller.
