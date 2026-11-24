@@ -402,7 +402,8 @@ export class Hmn {
       const db = this.store.db;
       if (this.searchDb !== db) {
         db.exec("ATTACH DATABASE ':memory:' AS search");
-        db.exec("CREATE VIRTUAL TABLE search.entity_fts USING fts5(id UNINDEXED, title, body, tokenize = 'unicode61 remove_diacritics 2')");
+        // Porter stems English words, so "notes" finds "note" and "running" finds "run". The index is built again at each start.
+        db.exec("CREATE VIRTUAL TABLE search.entity_fts USING fts5(id UNINDEXED, title, body, tokenize = 'porter unicode61 remove_diacritics 2')");
         this.searchDb = db;
         this.searchStamp = null;
       }

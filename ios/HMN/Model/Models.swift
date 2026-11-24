@@ -643,6 +643,39 @@ struct Connection: Codable, Identifiable {
     var revocable: Bool
     var reads: [ConnectionRead]
 }
+/// One row of the read log of an agent: a read of a row, or a search that it made.
+struct ClientRead: Codable, Identifiable {
+    var at: String
+    var action: String
+    var type: String?
+    var tier: String?
+    var title: String?
+    var id: String { at + action + (type ?? "") + (title ?? "") }
+}
+
+struct ClientReadList: Codable {
+    var reads: [ClientRead]
+}
+
+/// The rows near an item: each at a number of links from it.
+struct Neighbours: Codable {
+    var nodes: [Node]
+    var edges: [Edge]
+
+    struct Node: Codable, Identifiable {
+        var id: String
+        var type: String
+        var title: String
+        var kind: String?
+        var distance: Int
+    }
+    struct Edge: Codable {
+        var from: String
+        var to: String
+        var rel: String
+    }
+}
+
 struct ConnectionRead: Codable, Identifiable {
     var at: String
     var action: String

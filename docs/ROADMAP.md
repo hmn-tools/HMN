@@ -332,9 +332,10 @@ Found and fixed: `server/src/stdio.ts` did not work with an MCP client. It frame
 Open:
 
 - The OpenClaw and OpenJarvis settings in the guide come from their documents. They were not run against HMN.
-- The read log is saved with the next save of the database. A crash can lose the newest rows.
-- Search has no stemming. "notes" does not match "note" unless the query is the shorter word, because a word matches as a prefix.
-- The iPhone app does not use `neighbours` or the longer read log.
+- Checked on 2026-11-24: the read log reaches the disk at most one second after the read, because each request asks for a save and the saves come at most once a second (slice 22, batch 3). A crash loses at most that second. Test: `server/test/small-items.test.ts`.
+- Done on 2026-11-24: search stems English words, so "notes" finds "note" and "running" finds "run". A part of a word still matches.
+- Done on 2026-11-24: the iPhone app shows the rows two links away as Nearby on a record, through `neighbours`, and All reads on a connected agent opens its read log.
+- Done on 2026-11-24: the guide has "A one-time move from another system": an agent proposes each record, or writes an import file that the owner posts.
 
 Done when an agent with a Personal grant finds a task by a natural question, proposes a change twice with one key and creates one proposal, and the owner sees what that agent read. The tests in `server/test/agent-surface.test.ts` show the three.
 
@@ -355,7 +356,7 @@ Done:
 
 Open:
 
-- Done on 2026-11-19 in slice 19C: the iPhone app has a screen to add an area and to add or remove a kind. A new title for a kind is still set through the API.
+- Done on 2026-11-19 in slice 19C: the iPhone app has a screen to add an area and to add or remove a kind. Done on 2026-11-24: Rename gives a kind a new title on the phone.
 - Done on 2026-11-19: `deploy/install.sh` has `--empty` and `--demo`. A new graph needs one of them, or an answer from a person at a terminal. The install does not select the demonstration by default, because the demonstration cannot be removed later as a whole.
 - The demonstration's area ids are still in `server/src/seed.ts`, which is correct, and in old credentials of an existing data directory.
 
@@ -423,7 +424,7 @@ Open items:
 
 Open:
 
-- A new title for a kind on the phone.
+- Done on 2026-11-24: a new title for a kind on the phone.
 - A CalDAV server with no ICS address. It stays open in slice 15.
 
 Done when the tests show the five. They are in `server/test/kinds.test.ts`, `server/test/calendar-mirror.test.ts`, and `server/test/approval.test.ts`.

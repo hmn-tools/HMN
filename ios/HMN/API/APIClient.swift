@@ -185,6 +185,13 @@ final class APIClient: NSObject, URLSessionDelegate {
         let list: EntityList = try await send("/api/v1/\(try Path.segment(type))", surface: "phone")
         return list.entities
     }
+    func accessReads(_ id: String, limit: Int = 200) async throws -> [ClientRead] {
+        let list: ClientReadList = try await send("/api/v1/access/\(try Path.segment(id))/reads?limit=\(limit)", surface: "phone")
+        return list.reads
+    }
+    func neighbours(type: String, id: String, depth: Int = 2) async throws -> Neighbours {
+        try await send("/api/v1/\(try Path.segment(type))/\(try Path.segment(id))/neighbours?depth=\(depth)", surface: "phone")
+    }
     func links(type: String, id: String) async throws -> [GraphLink] {
         let list: LinkList = try await send("/api/v1/\(try Path.segment(type))/\(try Path.segment(id))/links", surface: "phone")
         return list.links

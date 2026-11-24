@@ -60,6 +60,11 @@ struct ConnectedView: View {
                     .font(Theme.small).foregroundStyle(Theme.graphite)
                     .lineLimit(1)
             }
+            // Agent keys and view keys keep a read log of their own. A phone, a plugin, and a display do not.
+            if !item.reads.isEmpty && (item.scopes.contains("agent") || item.scopes.contains("read")) && item.kind != "trmnl" && item.kind != "plugin" {
+                NavigationLink("All reads") { ReadsView(principalId: item.id, name: Self.shownName(item)) }
+                    .buttonStyle(TextButtonStyle())
+            }
         }
         .card()
     }
@@ -160,5 +165,63 @@ struct JournalView: View {
     private func load() async {
         do { entry = try await session.client().journal(id) }
         catch { message = error.localizedDescription }
+    }
+}
+
+/// The read log of one agent or app: each row it read and each search it made, the newest first.
+struct ReadsView: View {
+    @EnvironmentObject private var session: Session
+    let principalId: String
+    let name: String
+    @State private var reads: [ClientRead] = []
+    @State private var loaded = false
+    @State private var message: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if !loaded && message == nil { LoadingState() }
+                if loaded && reads.isEmpty { EmptyState(title: "Nothing read yet.") }
+                if let message { MessageLine(text: message, isError: true) }
+                if !reads.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(Array(reads.enumerated()), id: \.offset) { index, read in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(line(read)).font(Theme.row).lineLimit(2)
+                                Text([ReviewText.shortDate(read.at), read.tier?.capitalized].compactMap { $0 }.joined(separator: " · "))
+                                    .font(Theme.small).foregroundStyle(Theme.stone)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                            .padding(.horizontal, Theme.Space.l)
+                            if index < reads.count - 1 { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                        }
+                    }
+                    .card(padding: 0)
+                }
+            }
+            .padding(22)
+        }
+        .navigationTitle(name)
+        .navigationBarTitleDisplayMode(.inline)
+        .background(Theme.ground.ignoresSafeArea())
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    /// "Read Book the dentist", or "Searched: dentist".
+    private func line(_ read: ClientRead) -> String {
+        switch read.action {
+        case "read": return "Read \(read.title ?? read.type ?? "a row")"
+        case "search": return "Searched: \(read.title ?? "")"
+        default: return "\(read.action.capitalized): \(read.title ?? "")"
+        }
+    }
+
+    private func load() async {
+        do {
+            reads = try await session.client().accessReads(principalId)
+            message = nil
+        } catch { message = error.localizedDescription }
+        loaded = true
     }
 }

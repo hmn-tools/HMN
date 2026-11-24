@@ -11,6 +11,8 @@ struct AreasView: View {
     @State private var working = false
     @State private var loaded = false
     @State private var removing: KindInfo?
+    @State private var renaming: KindInfo?
+    @State private var newTitle = ""
 
     @State private var areaTitle = ""
     @State private var areaKind = "other"
@@ -84,6 +86,16 @@ struct AreasView: View {
             .padding(22)
         }
         .navigationTitle("Areas and kinds")
+        .alert("Rename \(renaming?.title ?? "the kind")", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newTitle)
+            Button("Save") {
+                if let kind = renaming { Task { await rename(kind) } }
+                renaming = nil
+            }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        } message: {
+            Text("The rules read its role, so they do not change.")
+        }
         .confirmationDialog("Remove \(removing?.title ?? "this kind")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
             Button("Remove", role: .destructive) {
                 if let kind = removing { Task { await remove(kind) } }
@@ -127,9 +139,13 @@ struct AreasView: View {
                 Text(kindLine(kind)).font(Theme.small).foregroundStyle(Theme.stone)
             }
             Spacer()
-            if !kind.core && kind.inUse == 0 {
-                Button("Remove") { removing = kind }
-                    .buttonStyle(TextButtonStyle(danger: true))
+            HStack(spacing: 16) {
+                Button("Rename") { newTitle = kind.title; renaming = kind }
+                    .buttonStyle(TextButtonStyle())
+                if !kind.core && kind.inUse == 0 {
+                    Button("Remove") { removing = kind }
+                        .buttonStyle(TextButtonStyle(danger: true))
+                }
             }
         }
     }
@@ -240,6 +256,18 @@ struct AreasView: View {
             kindRole = ""
             await load()
             if made.type == "area" { areaKind = made.kind }
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func rename(_ kind: KindInfo) async {
+        let title = newTitle.trimmingCharacters(in: .whitespaces)
+        guard !title.isEmpty, title != kind.title else { return }
+        do {
+            _ = try await session.client().saveKind(type: kind.type, kind: kind.kind, title: title, role: nil)
+            message = "\(kind.title) is now \(title)."
+            await load()
         } catch {
             message = error.localizedDescription
         }

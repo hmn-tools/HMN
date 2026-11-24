@@ -104,6 +104,7 @@ struct EntityDetailView: View {
     @State private var message: String?
     @State private var confirmDelete = false
     @State private var unlinking: GraphLink?
+    @State private var near: Neighbours?
     private let tiers = ["public", "household", "personal", "private", "sealed"]
 
     var body: some View {
@@ -185,6 +186,7 @@ struct EntityDetailView: View {
                     }
                     .card(padding: 0)
                 }
+                nearby
                 if let message { MessageLine(text: message) }
                 Button("Delete") { confirmDelete = true }.buttonStyle(TextButtonStyle(danger: true))
             }
@@ -209,6 +211,49 @@ struct EntityDetailView: View {
             Text("It leaves your lists. Its history stays.")
         }
         .task { await load() }
+    }
+
+    /// The rows two links away, each with the linked row it is reached through. At most eight.
+    @ViewBuilder private var nearby: some View {
+        if let near {
+            let byId = Dictionary(near.nodes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            let far = Array(near.nodes.filter { $0.distance == 2 && $0.kind != "item" }.prefix(8))
+            if !far.isEmpty {
+                SmallLabel(text: "Nearby")
+                VStack(spacing: 0) {
+                    ForEach(far) { node in
+                        NavigationLink {
+                            if node.type == "person" { PersonPageView(id: node.id, title: node.title) } else { EntityDetailView(type: node.type, id: node.id) }
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(node.title).font(Theme.row).foregroundStyle(Theme.ink)
+                                    Text(through(node, near, byId)).font(Theme.small).foregroundStyle(Theme.stone)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
+                            }
+                            .padding(.horizontal, Theme.Space.l)
+                            .frame(minHeight: 56)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if node.id != far.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                    }
+                }
+                .card(padding: 0)
+            }
+        }
+    }
+
+    /// "Project · through Weekly brief".
+    private func through(_ node: Neighbours.Node, _ near: Neighbours, _ byId: [String: Neighbours.Node]) -> String {
+        let step = near.edges.compactMap { edge -> Neighbours.Node? in
+            let other = edge.from == node.id ? edge.to : edge.to == node.id ? edge.from : nil
+            guard let other, let found = byId[other], found.distance == 1 else { return nil }
+            return found
+        }.first
+        return [node.type.capitalized, step.map { "through \($0.title)" }].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func labeled<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
@@ -268,6 +313,7 @@ struct EntityDetailView: View {
             readDue(entity?.dueAt)
             status = entity?.status ?? ""
             links = try await session.client().links(type: type, id: id)
+            near = try? await session.client().neighbours(type: type, id: id)
         } catch {
             message = error.localizedDescription
         }

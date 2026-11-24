@@ -203,3 +203,19 @@ For one message, with the id `4411` in the mail system, the agent does this:
 6. If the owner declined, the answer is `rejected`. The agent does not propose that message again.
 
 What the owner controls: the ceiling of the agent's key, each approval, and a `deny` rule for that key if the agent is too loud. What the agent brings: the mail connector, the model, and the schedule.
+
+## A one-time move from another system
+
+HMN does not read Notion, a spreadsheet, or another app. An agent that can read it makes the move. There are two ways.
+
+**A few dozen records: the agent proposes each one.** The agent calls `propose_create` for each record. It puts the id of the record in the other system in `entity.external_id`, and it uses `<system>-<id>:create` as the idempotency key. A second run sends the same keys and makes no copies. A key can have 100 proposals waiting, and it can file 60 in an hour, so the agent works in rounds. Review all, on the Review tab, takes the decision for a round in one step.
+
+**Hundreds of records: the agent writes an import file, and you post it one time.** The agent writes the records in the import format: `external_id`, `type`, and `title` for each record, and an optional `area`, `links`, `status`, `kind`, `due_at`, and `body`. [SCHEMA.md](SCHEMA.md), "Import", has the full format. An agent key cannot post the file, because the import needs the owner key. On the mini, run a dry run first:
+
+```sh
+printf 'Authorization: Bearer %s\n' "$(security find-generic-password -s hmn.owner -a hmn -w)" |
+  curl --cacert "$HOME/Library/Application Support/HMN/data/tls/ca.crt" -H @- -H "X-HMN-Surface: phone" \
+    -H "Content-Type: application/json" -d @import.json https://127.0.0.1:8787/api/v1/import
+```
+
+Set `"dry_run": true` in the file for the first run. The reply has one result for each record and changes nothing. Then set it to `false` and run the same command. Each record becomes a proposal from the source `import:<name>`, and you approve them with Review all. A record whose area or link is another record in the same file waits. Approve the first round, then post the same file again. A record that is in HMN already, or that you declined in the last 90 days, is not proposed again.
