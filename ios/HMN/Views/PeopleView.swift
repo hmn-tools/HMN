@@ -5,6 +5,8 @@ import SwiftUI
 struct PeopleView: View {
     @EnvironmentObject private var session: Session
     @State private var people: [PersonEntry] = []
+    @State private var making = false
+    @State private var opened: Entity?
     @State private var loaded = false
     @State private var message: String?
 
@@ -27,6 +29,18 @@ struct PeopleView: View {
             .padding(22)
         }
         .navigationTitle("People")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { making = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("New person")
+            }
+        }
+        .sheet(isPresented: $making) {
+            NewRecordSheet(type: "person") { made in opened = made }.themed()
+        }
+        .navigationDestination(item: $opened) { made in
+            ItemPage(type: made.type, id: made.id, title: made.title)
+        }
         .background(Theme.ground.ignoresSafeArea())
         // A person changes on its own page. Read again each time this one shows.
         .onAppear { Task { await load() } }
@@ -248,7 +262,10 @@ struct PersonPageView: View {
         working = true
         defer { working = false }
         do {
-            let task = try await session.client().createTask(title: text, due: nil, status: "open")
+            // A task for a Household or Private person is seen where the person is: the same area, and that tier.
+            let person = page?.person
+            let tier = ["household", "private", "sealed"].contains(person?.tier ?? "") ? person?.tier : nil
+            let task = try await session.client().createTask(title: text, due: nil, status: "open", areaId: person?.areaId, tier: tier)
             try await session.client().link(fromType: "task", fromId: task.id, rel: "for", toType: "person", toId: id)
             newTask = ""
             await load()

@@ -58,6 +58,7 @@ struct FamilyTasksView: View {
     @State private var routines: [Routine] = []
     @State private var loaded = false
     @State private var removing: Routine?
+    @State private var editing: Routine?
     @State private var message: String?
     @State private var note: String?
 
@@ -87,6 +88,9 @@ struct FamilyTasksView: View {
         }
         .navigationTitle("Family")
         .background(Theme.ground.ignoresSafeArea())
+        .sheet(item: $editing, onDismiss: { Task { await load() } }) { routine in
+            RoutineEditSheet(routine: routine).themed()
+        }
         .confirmationDialog("Remove \(removing?.habit.title ?? "this routine")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
             Button("Remove", role: .destructive) {
                 if let routine = removing { Task { await remove(routine) } }
@@ -143,14 +147,25 @@ struct FamilyTasksView: View {
                         Image(systemName: "minus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.hair).frame(width: 44, height: 44)
                             .accessibilityLabel("Not today")
                     }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(routine.habit.title)
-                            .font(Theme.row)
-                            .strikethrough(routine.doneToday, color: Theme.stone)
-                            .foregroundStyle(routine.doneToday || !routine.dueToday ? Theme.stone : Theme.ink)
-                        Text(routine.subtitle).font(Theme.small).foregroundStyle(Theme.stone)
+                    Button { if !session.isMember { editing = routine } } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(routine.habit.title)
+                                    .font(Theme.row)
+                                    .strikethrough(routine.doneToday, color: Theme.stone)
+                                    .foregroundStyle(routine.doneToday || !routine.dueToday ? Theme.stone : Theme.ink)
+                                Text(routine.subtitle).font(Theme.small).foregroundStyle(Theme.stone)
+                            }
+                            Spacer()
+                            if !session.isMember {
+                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        .contentShape(Rectangle())
                     }
-                    Spacer()
+                    .buttonStyle(.plain)
+                    .accessibilityHint(session.isMember ? "" : "Opens the routine")
                 }
                 .padding(.leading, 6)
                 .padding(.trailing, Theme.Space.l)
@@ -382,5 +397,119 @@ struct MemberSettingsView: View {
             hidden = true
             SnapshotStore.clear()
         } catch {}
+    }
+}
+
+/// Change a routine: its name, who it is for, its days, and a pause. docs/ONTOLOGY.md, section 2.5.
+struct RoutineEditSheet: View {
+    @EnvironmentObject private var session: Session
+    @Environment(\.dismiss) private var dismiss
+    let routine: Routine
+    @State private var title = ""
+    @State private var personId = ""
+    @State private var days: Set<String> = []
+    @State private var paused = false
+    @State private var people: [Entity] = []
+    @State private var working = false
+    @State private var message: String?
+    @State private var confirmDelete = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        SmallLabel(text: "Name")
+                        TextField("Name", text: $title).textFieldStyle(FieldStyle())
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        SmallLabel(text: "For")
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(people) { person in
+                                    Button(person.title) { personId = person.id }
+                                        .buttonStyle(ChipButtonStyle(selected: personId == person.id))
+                                        .accessibilityAddTraits(personId == person.id ? [.isSelected] : [])
+                                }
+                            }
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        SmallLabel(text: "Days")
+                        HStack(spacing: 6) {
+                            ForEach(NewRoutineCard.week, id: \.id) { day in
+                                Button(day.letter) {
+                                    if days.contains(day.id) { days.remove(day.id) } else { days.insert(day.id) }
+                                }
+                                .buttonStyle(ChipButtonStyle(selected: days.contains(day.id)))
+                                .accessibilityLabel(day.id.capitalized)
+                                .accessibilityAddTraits(days.contains(day.id) ? [.isSelected] : [])
+                            }
+                        }
+                    }
+                    Toggle(isOn: $paused) { Text("Paused").font(Theme.text) }.tint(Theme.tealDark)
+                    Button(working ? "Saving" : "Save") { Task { await save() } }
+                        .buttonStyle(PillButtonStyle())
+                        .disabled(working || title.trimmingCharacters(in: .whitespaces).isEmpty || days.isEmpty || personId.isEmpty)
+                    if let message { MessageLine(text: message, isError: true) }
+                    Button("Delete the routine") { confirmDelete = true }.buttonStyle(TextButtonStyle(danger: true))
+                }
+                .padding(16)
+            }
+            .navigationTitle("Routine")
+            .navigationBarTitleDisplayMode(.inline)
+            .background(Theme.ground.ignoresSafeArea())
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .confirmationDialog("Delete \(routine.habit.title)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { Task { await remove() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("It leaves the phones and the fridge. Paused keeps it for later.")
+            }
+            .task {
+                title = routine.habit.title
+                personId = routine.people.first?.id ?? ""
+                days = routine.days.isEmpty ? Set(NewRoutineCard.week.map(\.id)) : Set(routine.days)
+                paused = routine.habit.status == "paused"
+                let all = (try? await session.client().entities("person")) ?? []
+                people = all.filter { $0.tier == "household" || $0.tier == "public" }
+            }
+        }
+    }
+
+    /// "Every day", "Weekdays", "Weekends", or "Mon, Wed", as the server writes it.
+    private func cadence(_ picked: [String]) -> String {
+        if picked.count == 7 { return "Every day" }
+        if picked == ["mon", "tue", "wed", "thu", "fri"] { return "Weekdays" }
+        if picked == ["sat", "sun"] { return "Weekends" }
+        return picked.map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: ", ")
+    }
+
+    private func save() async {
+        working = true
+        defer { working = false }
+        let picked = NewRoutineCard.week.map(\.id).filter { days.contains($0) }
+        let stored = picked.count == 7 ? [String]() : picked
+        do {
+            _ = try await session.client().updateRecord(type: "habit", id: routine.id, body: [
+                "title": title.trimmingCharacters(in: .whitespaces),
+                "status": paused ? "paused" : "active",
+                "properties_patch": ["days": stored, "cadence": cadence(picked)],
+            ])
+            // A new person: the old `for` link goes, and a new one comes.
+            if personId != routine.people.first?.id {
+                let links = (try? await session.client().links(type: "habit", id: routine.id)) ?? []
+                for link in links where link.rel == "for" && link.direction == "out" { try await session.client().deleteLink(link.id) }
+                try await session.client().link(fromType: "habit", fromId: routine.id, rel: "for", toType: "person", toId: personId)
+            }
+            dismiss()
+        } catch { message = error.localizedDescription }
+    }
+
+    private func remove() async {
+        do {
+            try await session.client().deleteEntity(type: "habit", id: routine.id)
+            dismiss()
+        } catch { message = error.localizedDescription }
     }
 }

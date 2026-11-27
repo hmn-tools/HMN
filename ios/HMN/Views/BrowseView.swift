@@ -12,6 +12,10 @@ struct BrowseView: View {
     @State private var loaded = false
     /// For a project: how many steps are open, and the next date. It replaces "Active · Personal".
     @State private var summaries: [String: String] = [:]
+    @State private var schema: AppSchema?
+    @State private var making = false
+    @State private var opened: Entity?
+    @State private var showArchived = false
 
     var body: some View {
         ScrollView {
@@ -30,11 +34,12 @@ struct BrowseView: View {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(row.title).font(Theme.row).foregroundStyle(Theme.ink)
-                                            Text(summaries[row.id] ?? [row.kind?.capitalized, row.status?.capitalized, row.tier.capitalized].compactMap { $0 }.joined(separator: " · "))
+                                            Text(summaries[row.id] ?? line(row))
                                                 .font(Theme.small).foregroundStyle(Theme.stone)
                                         }
                                         Spacer()
-                                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
+                                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
+                                            .accessibilityHidden(true)
                                     }
                                     .padding(.horizontal, Theme.Space.l)
                                     .frame(minHeight: 60)
@@ -47,16 +52,57 @@ struct BrowseView: View {
                     }
                     .card(padding: 0)
                 }
+                if loaded && archivable {
+                    Button(showArchived ? "Hide archived" : "Show archived") {
+                        showArchived.toggle()
+                        Task { await load() }
+                    }
+                    .buttonStyle(TextButtonStyle())
+                    .padding(.top, 8)
+                }
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle(title)
         .background(Theme.ground.ignoresSafeArea())
-        .task { await load() }
+        .toolbar {
+            if canMake {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { making = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("New \(Words.type(type).lowercased())")
+                }
+            }
+        }
+        .sheet(isPresented: $making) {
+            NewRecordSheet(type: type) { made in opened = made }.themed()
+        }
+        .navigationDestination(item: $opened) { made in
+            ItemPage(type: made.type, id: made.id, title: made.title)
+        }
+        // A record changes in its own screen. Read again each time this one shows.
+        .onAppear { Task { await load() } }
+        .refreshable { await load() }
+    }
+
+    private var canMake: Bool { NewRecordSheet.choices.contains { $0.0 == type } }
+    private var archivable: Bool { schema?.statuses[type]?.contains("archived") == true }
+
+    /// The second line in words: the kind, the date or the status, and the tier only when it is not Personal.
+    private func line(_ row: Entity) -> String {
+        var parts: [String] = []
+        if let kind = schema?.kindTitle(row.type, row.kind) { parts.append(kind) }
+        if let due = row.dueAt, !due.isEmpty, let date = DateText.parse(due) {
+            parts.append(date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+        } else if let status = row.status, !status.isEmpty, status != "open", status != "active" {
+            parts.append(Words.id(status))
+        }
+        if row.tier != "personal" { parts.append(Words.id(row.tier)) }
+        return parts.isEmpty ? Words.type(row.type) : parts.joined(separator: " · ")
     }
 
     private func load() async {
-        do { rows = try await session.client().entities(type).filter { hiddenKind == nil || $0.kind != hiddenKind } }
+        schema = await SchemaCache.load(session)
+        do { rows = try await session.client().entities(type, archived: showArchived).filter { hiddenKind == nil || $0.kind != hiddenKind } }
         catch { message = error.localizedDescription }
         loaded = true
         if type == "project" { await summarise() }
@@ -87,259 +133,3 @@ struct BrowseView: View {
     }
 }
 
-struct EntityDetailView: View {
-    @EnvironmentObject private var session: Session
-    @Environment(\.dismiss) private var dismiss
-    var type: String
-    var id: String
-    @State private var entity: Entity?
-    @State private var links: [GraphLink] = []
-    @State private var title = ""
-    @State private var bodyText = ""
-    @State private var hasDue = false
-    @State private var dueDate = Date()
-    /// A date with a time keeps its time. A date with no time stays a day.
-    @State private var dueHasTime = false
-    @State private var status = ""
-    @State private var message: String?
-    @State private var confirmDelete = false
-    @State private var unlinking: GraphLink?
-    @State private var near: Neighbours?
-    private let tiers = ["public", "household", "personal", "private", "sealed"]
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 12) {
-                    TextField("Title", text: $title).font(Theme.heading)
-                    TextField("Notes", text: $bodyText, axis: .vertical)
-                        .textFieldStyle(FieldStyle())
-                        .lineLimit(3...10)
-                    HStack {
-                        Toggle(isOn: $hasDue) { Text("Date").font(Theme.body) }
-                            .tint(Theme.tealDark)
-                            .fixedSize()
-                        Spacer()
-                        if hasDue {
-                            DatePicker("Date", selection: $dueDate, displayedComponents: dueHasTime ? [.date, .hourAndMinute] : [.date])
-                                .labelsHidden()
-                        }
-                    }
-                    if !statuses.isEmpty {
-                        labeled("Status") {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 6) {
-                                    ForEach(statuses, id: \.self) { value in
-                                        Button(value.capitalized) { status = value }
-                                            .buttonStyle(ChipButtonStyle(selected: status == value))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if let line = entity?.doneLine {
-                        Text(line).font(Theme.small).foregroundStyle(Theme.stone)
-                    }
-                    Button("Save") { Task { await save(tier: nil) } }.buttonStyle(PillButtonStyle())
-                }
-                .card()
-                if type == "task", let entity, entity.kind != "item" {
-                    ForPeopleCard(taskId: id, links: links) { await load() }
-                    ItemsEditor(parentId: id, placeholder: "Add a step", empty: "No steps.", label: "Steps")
-                }
-                if let entity {
-                    VStack(alignment: .leading, spacing: 8) {
-                        SmallLabel(text: "Who sees it")
-                        // Five tiers do not fit one line on a small phone. The row scrolls.
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 6) {
-                                ForEach(tiers, id: \.self) { tier in
-                                    Button(tier.capitalized) { Task { await save(tier: tier) } }
-                                        .buttonStyle(ChipButtonStyle(selected: entity.tier == tier))
-                                        .accessibilityValue(entity.tier == tier ? "selected" : "")
-                                }
-                            }
-                        }
-                        Text(entity.tierSource == "override" ? "Set on this item." : "From its area.")
-                            .font(Theme.small).foregroundStyle(Theme.stone)
-                    }
-                    .card()
-                }
-                let others = links.filter { !(type == "task" && $0.rel == "for" && $0.peer.type == "person") && $0.peer.kind != "item" }
-                if !others.isEmpty {
-                    SmallLabel(text: "Linked")
-                    VStack(spacing: 0) {
-                        ForEach(others) { link in
-                            HStack {
-                                NavigationLink {
-                                    ItemPage(type: link.peer.type, id: link.peer.id, title: link.peer.title)
-                                } label: {
-                                    Text(link.peer.title).font(Theme.row).foregroundStyle(Theme.ink)
-                                }
-                                Spacer()
-                                Button("Remove") { unlinking = link }.buttonStyle(TextButtonStyle(danger: true))
-                            }
-                            .padding(.horizontal, Theme.Space.l)
-                            .frame(minHeight: 52)
-                            if link.id != others.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
-                        }
-                    }
-                    .card(padding: 0)
-                }
-                nearby
-                if let message { MessageLine(text: message) }
-                Button("Delete") { confirmDelete = true }.buttonStyle(TextButtonStyle(danger: true))
-            }
-            .padding(22)
-        }
-        .navigationTitle(type.capitalized)
-        .navigationBarTitleDisplayMode(.inline)
-        .background(Theme.ground.ignoresSafeArea())
-        .confirmationDialog("Remove the link to \(unlinking?.peer.title ?? "it")?", isPresented: Binding(get: { unlinking != nil }, set: { if !$0 { unlinking = nil } }), titleVisibility: .visible) {
-            Button("Remove", role: .destructive) {
-                if let link = unlinking { Task { await unlink(link.id) } }
-                unlinking = nil
-            }
-            Button("Cancel", role: .cancel) { unlinking = nil }
-        } message: {
-            Text("Both items stay. Only the link goes.")
-        }
-        .confirmationDialog("Delete \(title.isEmpty ? "this" : title)?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { Task { await remove() } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("It leaves your lists. Its history stays.")
-        }
-        .task { await load() }
-    }
-
-    /// The rows two links away, each with the linked row it is reached through. At most eight.
-    @ViewBuilder private var nearby: some View {
-        if let near {
-            let byId = Dictionary(near.nodes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            let far = Array(near.nodes.filter { $0.distance == 2 && $0.kind != "item" }.prefix(8))
-            if !far.isEmpty {
-                SmallLabel(text: "Nearby")
-                VStack(spacing: 0) {
-                    ForEach(far) { node in
-                        NavigationLink {
-                            if node.type == "person" { PersonPageView(id: node.id, title: node.title) } else { EntityDetailView(type: node.type, id: node.id) }
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(node.title).font(Theme.row).foregroundStyle(Theme.ink)
-                                    Text(through(node, near, byId)).font(Theme.small).foregroundStyle(Theme.stone)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
-                            }
-                            .padding(.horizontal, Theme.Space.l)
-                            .frame(minHeight: 56)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        if node.id != far.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
-                    }
-                }
-                .card(padding: 0)
-            }
-        }
-    }
-
-    /// "Project · through Weekly brief".
-    private func through(_ node: Neighbours.Node, _ near: Neighbours, _ byId: [String: Neighbours.Node]) -> String {
-        let step = near.edges.compactMap { edge -> Neighbours.Node? in
-            let other = edge.from == node.id ? edge.to : edge.to == node.id ? edge.from : nil
-            guard let other, let found = byId[other], found.distance == 1 else { return nil }
-            return found
-        }.first
-        return [node.type.capitalized, step.map { "through \($0.title)" }].compactMap { $0 }.joined(separator: " · ")
-    }
-
-    private func labeled<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            SmallLabel(text: label)
-            content()
-        }
-    }
-
-    /// The statuses of each type, from SCHEMA.md. A status that is not in the list is kept and shown.
-    private var statuses: [String] {
-        let known: [String: [String]] = [
-            "task": ["inbox", "open", "done"],
-            "project": ["active", "paused", "done", "someday"],
-            "goal": ["active", "paused", "done"],
-            "event": ["upcoming", "done", "cancelled"],
-            "habit": ["active", "paused"],
-        ]
-        guard var list = known[type] else { return [] }
-        if !status.isEmpty && !list.contains(status) { list.append(status) }
-        return list
-    }
-
-    private func readDue(_ value: String?) {
-        guard let value, !value.isEmpty else { hasDue = false; return }
-        hasDue = true
-        if value.contains("T") {
-            let parser = ISO8601DateFormatter()
-            parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            dueDate = parser.date(from: value) ?? ISO8601DateFormatter().date(from: value) ?? Date()
-            dueHasTime = true
-        } else {
-            dueDate = Self.dayFormat.date(from: String(value.prefix(10))) ?? Date()
-            dueHasTime = false
-        }
-    }
-
-    private var dueString: String {
-        guard hasDue else { return "" }
-        return dueHasTime ? ISO8601DateFormatter().string(from: dueDate) : Self.dayFormat.string(from: dueDate)
-    }
-
-    private static let dayFormat: DateFormatter = {
-        let format = DateFormatter()
-        format.calendar = Calendar(identifier: .gregorian)
-        format.locale = Locale(identifier: "en_US_POSIX")
-        format.dateFormat = "yyyy-MM-dd"
-        return format
-    }()
-
-    private func load() async {
-        do {
-            let rows = try await session.client().entities(type)
-            entity = rows.first { $0.id == id }
-            title = entity?.title ?? ""
-            bodyText = entity?.body ?? ""
-            readDue(entity?.dueAt)
-            status = entity?.status ?? ""
-            links = try await session.client().links(type: type, id: id)
-            near = try? await session.client().neighbours(type: type, id: id)
-        } catch {
-            message = error.localizedDescription
-        }
-    }
-
-    private func save(tier: String?) async {
-        var fields = ["title": title, "body": bodyText, "due_at": dueString, "status": status]
-        if let tier { fields["tier"] = tier }
-        do {
-            entity = try await session.client().updateEntity(type: type, id: id, fields: fields)
-            message = tier == "public" ? "Saved. It shows on shared displays now." : "Saved."
-            await load()
-        } catch { message = error.localizedDescription }
-    }
-
-    private func unlink(_ linkId: String) async {
-        do {
-            try await session.client().deleteLink(linkId)
-            await load()
-        } catch { message = error.localizedDescription }
-    }
-
-    private func remove() async {
-        do {
-            try await session.client().deleteEntity(type: type, id: id)
-            dismiss()
-        } catch { message = error.localizedDescription }
-    }
-}

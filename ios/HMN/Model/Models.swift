@@ -44,7 +44,7 @@ struct ScreenItem: Codable, Equatable, Identifiable {
     var type: String?
 }
 
-struct Entity: Codable, Identifiable, Equatable {
+struct Entity: Codable, Identifiable, Hashable {
     var id: String
     var type: String
     var title: String
@@ -60,7 +60,7 @@ struct Entity: Codable, Identifiable, Equatable {
     /// Only the keys the app reads. The server writes who completed a task, and when.
     var properties: Completion?
 
-    struct Completion: Codable, Equatable {
+    struct Completion: Codable, Hashable {
         var doneBy: String?
         var doneAt: String?
         /// A routine: its days in words ("Mon, Wed"), and today's check-in.
@@ -564,6 +564,75 @@ struct Routine: Codable, Identifiable {
 
 struct RoutineList: Codable {
     var routines: [Routine]
+}
+
+/// What the editors need from the server. docs/SCHEMA.md, "Archive, note kinds, fields, and links".
+struct AppSchema: Codable {
+    var statuses: [String: [String]]
+    var kinds: [KindInfo]
+    var relations: [Relation]
+    var fields: [String: [FieldSpec]]
+
+    struct Relation: Codable, Hashable {
+        var rel: String
+        var out: String
+        var inWord: String
+        private enum CodingKeys: String, CodingKey { case rel, out, inWord = "in" }
+    }
+    struct FieldSpec: Codable, Hashable {
+        var key: String
+        var label: String
+        var type: String
+        var choices: [String]?
+    }
+
+    func kinds(of type: String) -> [KindInfo] { kinds.filter { $0.type == type } }
+    func kindTitle(_ type: String, _ kind: String?) -> String? {
+        guard let kind else { return nil }
+        return kinds.first { $0.type == type && $0.kind == kind }?.title ?? Words.id(kind)
+    }
+    func relation(_ rel: String) -> Relation? { relations.first { $0.rel == rel } }
+}
+
+/// A record's properties as plain values. Only the typed fields read them.
+struct RawRecord: Decodable {
+    var properties: [String: Any]
+    private enum CodingKeys: String, CodingKey { case properties }
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let value = try? container.decode(JSONAny.self, forKey: .properties)
+        properties = (value?.value as? [String: Any]) ?? [:]
+    }
+}
+
+/// Any JSON value, for the few places that read free properties.
+struct JSONAny: Decodable {
+    let value: Any
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() { value = NSNull() }
+        else if let bool = try? container.decode(Bool.self) { value = bool }
+        else if let number = try? container.decode(Double.self) { value = number }
+        else if let text = try? container.decode(String.self) { value = text }
+        else if let list = try? container.decode([JSONAny].self) { value = list.map(\.value) }
+        else if let map = try? container.decode([String: JSONAny].self) { value = map.mapValues(\.value) }
+        else { value = NSNull() }
+    }
+}
+
+/// Stored ids in words: "side_project" is "Side project", "upcoming" is "Upcoming".
+enum Words {
+    static func id(_ value: String) -> String {
+        let text = value.replacingOccurrences(of: "_", with: " ")
+        return text.prefix(1).uppercased() + text.dropFirst()
+    }
+    static func type(_ value: String) -> String {
+        switch value {
+        case "asset": return "Thing"
+        case "habit": return "Habit"
+        default: return id(value)
+        }
+    }
 }
 
 /// The yearly review of one calendar year, and the owner's note for it. docs/STRATEGY.md, role 7.

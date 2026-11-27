@@ -24,7 +24,7 @@ struct TodayView: View {
     @State private var opened: ScreenItem?
     private let deck = ["today", "upcoming", "commitments", "quiet", "week"]
     /// The sections whose rows are tasks. A row there has a circle that completes it.
-    private let taskSections: Set<String> = ["due", "commitments", "slipped", "mine", "today"]
+    private let taskSections: Set<String> = ["overdue", "due", "commitments", "slipped", "mine", "today", "next"]
 
     var body: some View {
         VStack(spacing: 0) {

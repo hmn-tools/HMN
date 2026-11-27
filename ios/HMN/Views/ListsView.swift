@@ -124,17 +124,26 @@ struct ListsView: View {
 
 /// One list: add an item, tick it, bring a done one back.
 struct ListDetailView: View {
+    @EnvironmentObject private var session: Session
     var parentId: String
     var title: String
 
     var body: some View {
         ScrollView {
             ItemsEditor(parentId: parentId, placeholder: "Add an item", empty: "Nothing on it yet.")
-                .padding(22)
+                .padding(16)
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .background(Theme.ground.ignoresSafeArea())
+        .toolbar {
+            // The owner renames, re-tiers, completes, archives, or deletes the list in its editor.
+            if !session.isMember {
+                ToolbarItem(placement: .primaryAction) {
+                    NavigationLink("Edit") { RecordView(type: "project", id: parentId) }
+                }
+            }
+        }
     }
 }
 
@@ -152,6 +161,9 @@ struct ItemsEditor: View {
     /// A member's write that waits for the owner. It is news, not an error.
     @State private var note: String?
     @FocusState private var adding: Bool
+    @State private var renaming: Entity?
+    @State private var renameText = ""
+    @State private var deleting: Entity?
 
     var body: some View {
         let open = items.filter { !$0.isDone }
@@ -212,10 +224,32 @@ struct ItemsEditor: View {
                 .padding(.leading, 6)
                 .padding(.trailing, Theme.Space.l)
                 .frame(minHeight: 52)
+                .contentShape(Rectangle())
+                .contextMenu {
+                    if !session.isMember {
+                        Button("Rename") { renameText = item.title; renaming = item }
+                        Button("Delete", role: .destructive) { deleting = item }
+                    }
+                }
                 if item.id != list.last?.id { Theme.rule.frame(height: 1).padding(.leading, 54) }
             }
         }
         .card(padding: 0)
+        .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $renameText)
+            Button("Save") {
+                if let item = renaming { Task { await rename(item) } }
+                renaming = nil
+            }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        }
+        .confirmationDialog("Delete \(deleting?.title ?? "it")?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let item = deleting { Task { await delete(item) } }
+                deleting = nil
+            }
+            Button("Cancel", role: .cancel) { deleting = nil }
+        }
     }
 
     private func load() async {
@@ -244,6 +278,24 @@ struct ItemsEditor: View {
             newItem = title
             message = error.localizedDescription
         }
+    }
+
+    private func rename(_ item: Entity) async {
+        let text = renameText.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty, text != item.title else { return }
+        do {
+            _ = try await session.client().updateRecord(type: "task", id: item.id, body: ["title": text])
+            items = try await session.client().items(parent: parentId).items
+            message = nil
+        } catch { message = error.localizedDescription }
+    }
+
+    private func delete(_ item: Entity) async {
+        do {
+            try await session.client().deleteEntity(type: "task", id: item.id)
+            withAnimation { items.removeAll { $0.id == item.id } }
+            message = nil
+        } catch { message = error.localizedDescription }
     }
 
     private func toggle(_ item: Entity) async {

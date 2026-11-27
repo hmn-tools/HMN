@@ -81,12 +81,27 @@ struct CaptureView: View {
                 .font(Theme.small)
                 .foregroundStyle(Theme.stone)
             if openId == item.id {
-                TextField("File to…", text: $fileQuery)
+                SmallLabel(text: "Make it a")
+                HStack(spacing: 6) {
+                    Button("Task") { Task { await make(item, "task") } }.buttonStyle(ChipButtonStyle())
+                    Button("Note") { Task { await make(item, "note") } }.buttonStyle(ChipButtonStyle())
+                    Button("Person") { Task { await make(item, "person") } }.buttonStyle(ChipButtonStyle())
+                }
+                SmallLabel(text: "Or keep it as a note about")
+                TextField("Find a person, a project, a thing", text: $fileQuery)
                     .textFieldStyle(FieldStyle())
                     .onChange(of: fileQuery) { _, value in Task { await lookUp(value) } }
                 ForEach(fileHits) { hit in
-                    Button("\(hit.title)") { Task { await file(item, to: hit.id) } }
-                        .buttonStyle(TextButtonStyle())
+                    Button { Task { await file(item, to: hit.id) } } label: {
+                        HStack {
+                            Text(hit.title).font(Theme.row).foregroundStyle(Theme.ink)
+                            Spacer()
+                            Text(Words.type(hit.type)).font(Theme.small).foregroundStyle(Theme.stone)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
                 TextField("Change the #tags", text: $retag, axis: .vertical)
                     .textFieldStyle(FieldStyle())
@@ -189,6 +204,20 @@ struct CaptureView: View {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 2 else { fileHits = []; return }
         fileHits = Array(((try? await session.client().search(trimmed)) ?? []).prefix(4))
+    }
+
+    /// The capture becomes a task, a note, or a person, with no tag to type first.
+    private func make(_ item: InboxItem, _ route: String) async {
+        do {
+            _ = try await session.client().processInbox(item.id, action: "accept", route: route)
+            openId = nil
+            message = nil
+            saved = route == "person" ? "Added to People." : route == "note" ? "Kept as a note." : "Now a task."
+            await reload()
+            await session.refreshToday()
+        } catch {
+            message = error.localizedDescription
+        }
     }
 
     private func file(_ item: InboxItem, to entityId: String) async {

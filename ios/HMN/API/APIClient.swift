@@ -181,6 +181,10 @@ final class APIClient: NSObject, URLSessionDelegate {
             "from_type": fromType, "from_id": fromId, "rel": rel, "to_type": toType, "to_id": toId,
         ])
     }
+    func entities(_ type: String, archived: Bool) async throws -> [Entity] {
+        let list: EntityList = try await send("/api/v1/\(try Path.segment(type))\(archived ? "?archived=1" : "")", surface: "phone")
+        return list.entities
+    }
     func entities(_ type: String) async throws -> [Entity] {
         let list: EntityList = try await send("/api/v1/\(try Path.segment(type))", surface: "phone")
         return list.entities
@@ -220,17 +224,39 @@ final class APIClient: NSObject, URLSessionDelegate {
         if !attachments.isEmpty { body["attachments"] = attachments }
         return try await sendJSON("/api/v1/inbox", method: "POST", surface: "phone", body: body)
     }
-    func processInbox(_ id: String, action: String, text: String? = nil, entityId: String? = nil) async throws -> InboxItem {
+    func processInbox(_ id: String, action: String, text: String? = nil, entityId: String? = nil, route: String? = nil) async throws -> InboxItem {
         var body: [String: Any] = ["action": action]
         if let text { body["text"] = text }
         if let entityId { body["entity_id"] = entityId }
+        if let route { body["route"] = route }
         return try await sendJSON("/api/v1/inbox/\(try Path.segment(id))/process", method: "POST", surface: "phone", body: body)
     }
     /// A task with no date goes to the inbox, unless the caller names a status, such as "open" for a step of a project.
-    func createTask(title: String, due: String?, status: String? = nil) async throws -> Entity {
+    /// A task made on a person or a project page takes that page's area and tier, so it is seen where the page is.
+    func createTask(title: String, due: String?, status: String? = nil, areaId: String? = nil, tier: String? = nil) async throws -> Entity {
         var body: [String: String] = ["title": title, "status": status ?? (due == nil ? "inbox" : "open"), "kind": "task"]
         if let due { body["due_at"] = due }
+        if let areaId { body["area_id"] = areaId }
+        if let tier { body["tier"] = tier }
         return try await send("/api/v1/task", method: "POST", surface: "phone", body: body)
+    }
+    /// What the editors need: statuses, kinds, relations, and typed fields. docs/SCHEMA.md.
+    func schema() async throws -> AppSchema {
+        try await send("/api/v1/schema", surface: "phone")
+    }
+    /// One record by its id, and its properties as plain values for the typed fields.
+    func record(type: String, id: String) async throws -> (Entity, [String: Any]) {
+        let path = "/api/v1/\(try Path.segment(type))/\(try Path.segment(id))"
+        let entity: Entity = try await send(path, surface: "phone")
+        let raw: RawRecord = try await send(path, surface: "phone")
+        return (entity, raw.properties)
+    }
+    func createRecord(type: String, body: [String: Any]) async throws -> Entity {
+        try await sendJSON("/api/v1/\(try Path.segment(type))", method: "POST", surface: "phone", body: body)
+    }
+    /// A change with any values: NSNull clears a field, and `properties_patch` changes some properties only.
+    func updateRecord(type: String, id: String, body: [String: Any]) async throws -> Entity {
+        try await sendJSON("/api/v1/\(try Path.segment(type))/\(try Path.segment(id))", method: "PATCH", surface: "phone", body: body)
     }
     func updateEntity(type: String, id: String, fields: [String: String]) async throws -> Entity {
         try await send("/api/v1/\(try Path.segment(type))/\(try Path.segment(id))", method: "PATCH", surface: "phone", body: fields)

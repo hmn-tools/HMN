@@ -163,7 +163,9 @@ struct ProjectPageView: View {
         working = true
         defer { working = false }
         do {
-            let task = try await session.client().createTask(title: text, due: nil, status: "open")
+            // The task takes the project's area, and its tier when the project has one of its own.
+            let tier = project?.tierSource == "override" ? project?.tier : nil
+            let task = try await session.client().createTask(title: text, due: nil, status: "open", areaId: project?.areaId, tier: tier)
             try await session.client().link(fromType: "task", fromId: task.id, rel: "part_of", toType: "project", toId: id)
             newTask = ""
             await load()
