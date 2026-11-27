@@ -12,15 +12,17 @@ beforeAll(() => {
 afterAll(() => app.close());
 
 /** The id of a process that has ended. */
-function deadPid(): number {
-  const proc = Bun.spawnSync(["true"]);
-  expect(proc.exitCode).toBe(0);
+async function deadPid(): Promise<number> {
+  // Bun.spawn gives the id in each Bun version. Bun.spawnSync in Bun 1.2.5 did not.
+  const proc = Bun.spawn(["true"]);
+  expect(await proc.exited).toBe(0);
+  expect(typeof proc.pid).toBe("number");
   return proc.pid;
 }
 
-test("a start removes the working copy of a server that was killed, and no other file", () => {
+test("a start removes the working copy of a server that was killed, and no other file", async () => {
   const base = runtimeBase();
-  const dead = deadPid();
+  const dead = await deadPid();
   if (processIsAlive(dead)) {
     // A sandboxed shell can refuse the check of another process. HMN then keeps each copy, which is the
     // safe side, and this test has nothing to show. CI and a normal shell run the test.
