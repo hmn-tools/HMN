@@ -65,7 +65,7 @@ struct YearReviewView: View {
     private func noteCard(_ review: YearReview) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             SmallLabel(text: "Your note")
-            TextField("What was this year for?", text: $noteText, axis: .vertical)
+            TextField(hint: "What was this year for?", text: $noteText, axis: .vertical)
                 .font(Theme.text)
                 .lineLimit(4...14)
                 .focused($writing)
@@ -103,7 +103,7 @@ struct YearReviewView: View {
                     }
                 }
                 .frame(minHeight: 52)
-                .overlay(alignment: .top) { if index > 0 { Theme.rule.frame(height: 1) } }
+                .overlay(alignment: .top) { if index > 0 { Theme.hair.frame(height: 1) } }
             }
         }
         .padding(.horizontal, 16)

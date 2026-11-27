@@ -279,9 +279,9 @@ enum WidgetFont {
     static func sans(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         let name: String
         switch weight {
-        case .semibold, .bold, .heavy, .black: name = "IBMPlexSans-SemiBold"
-        case .medium: name = "IBMPlexSans-Medium"
-        default: name = "IBMPlexSans-Regular"
+        case .semibold, .bold, .heavy, .black: name = "IBMPlexSans-SmBld"
+        case .medium: name = "IBMPlexSans-Medm"
+        default: name = "IBMPlexSans"
         }
         return .custom(name, size: size)
     }

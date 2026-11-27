@@ -47,16 +47,17 @@ struct SettingsView: View {
                     }
                     group("The graph") {
                         ForEach(graph, id: \.self) { type in
-                            row(type.capitalized + "s", last: type == graph.last) {
-                                BrowseView(type: type, title: type.capitalized + "s", empty: "Nothing here yet.")
+                            row(Words.type(type) + "s", last: type == graph.last) {
+                                BrowseView(type: type, title: Words.type(type) + "s", empty: "Nothing here yet.")
                             }
                         }
                     }
                     }
                 }
-                .padding(22)
+                .padding(16)
             }
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
             .background(Theme.ground.ignoresSafeArea())
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
             .onDisappear { session.persistConnection() }
@@ -89,11 +90,11 @@ struct SettingsView: View {
                 HStack {
                     Text(title).font(Theme.row).foregroundStyle(Theme.ink)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
                 }
                 .padding(.horizontal, Theme.Space.l)
                 .frame(minHeight: 52)
-                if !last { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                if !last { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
             }
             .contentShape(Rectangle())
         }
@@ -110,7 +111,7 @@ struct SettingsView: View {
     private var codeField: some View {
         VStack(alignment: .leading, spacing: 6) {
             SmallLabel(text: "Pairing code")
-            TextField("Pairing code", text: $code)
+            TextField(hint: "Pairing code", text: $code)
                 .textFieldStyle(FieldStyle())
                 .textInputAutocapitalization(.characters).autocorrectionDisabled()
                 .keyboardType(.asciiCapable)
@@ -122,7 +123,7 @@ struct SettingsView: View {
     private func field(_ label: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             SmallLabel(text: label)
-            TextField(label, text: text)
+            TextField(hint: label, text: text)
                 .textFieldStyle(FieldStyle())
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
         }
@@ -160,7 +161,7 @@ struct AgentsAndAppsView: View {
                     .accessibilityAddTraits(part == "keys" ? [.isSelected] : [])
                 Spacer()
             }
-            .padding(.horizontal, 22)
+            .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background(Theme.ground)
         }
@@ -184,18 +185,11 @@ struct PrivacyView: View {
     @State private var confirmHide = false
     @State private var vaultMessage: String?
 
-    private static let clock: DateFormatter = {
-        let format = DateFormatter()
-        format.timeStyle = .short
-        format.dateStyle = .none
-        return format
-    }()
-
     /// "The vault is open until 14:05." The phone closes it then, and when the app leaves the screen.
     private var vaultLine: String {
         guard session.grant != nil else { return "The vault is closed." }
         guard let until = session.grantExpires else { return "The vault is open." }
-        return "The vault is open until \(Self.clock.string(from: until))."
+        return "The vault is open until \(When.time(until))."
     }
 
     private func openVault() async {
@@ -241,9 +235,10 @@ struct PrivacyView: View {
                     Button("Hide this phone") { confirmHide = true }.buttonStyle(PillButtonStyle(kind: .secondary))
                 }
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle("Privacy")
+        .navigationBarTitleDisplayMode(.inline)
         .background(Theme.ground.ignoresSafeArea())
         .task { await readHidden() }
         .confirmationDialog("Hide this phone?", isPresented: $confirmHide, titleVisibility: .visible) {
@@ -266,7 +261,7 @@ struct PrivacyView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
             .padding(.horizontal, Theme.Space.l)
-            if !last { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+            if !last { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
         }
     }
 }
@@ -287,15 +282,16 @@ struct AuditView: View {
                     VStack(spacing: 0) {
                         ForEach(Array(groups.enumerated()), id: \.element.first.id) { index, group in
                             row(group.first, count: group.count)
-                            if index < groups.count - 1 { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                            if index < groups.count - 1 { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
                         }
                     }
                     .card(padding: 0)
                 }
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle("Audit log")
+        .navigationBarTitleDisplayMode(.inline)
         .background(Theme.ground.ignoresSafeArea())
         .task {
             do {
@@ -329,10 +325,10 @@ struct AuditView: View {
                     .font(Theme.small).foregroundStyle(Theme.stone)
             }
             Spacer()
-            if let tier = entry.tier { Text(tier.capitalized).font(Theme.small).foregroundStyle(Theme.graphite) }
+            if let tier = entry.tier { Text(Words.id(tier)).font(Theme.small).foregroundStyle(Theme.graphite) }
         }
         .padding(.horizontal, Theme.Space.l)
-        .frame(minHeight: 56)
+        .frame(minHeight: 60)
     }
 
     /// Where the request came from, in words.

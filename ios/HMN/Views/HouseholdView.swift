@@ -24,7 +24,7 @@ struct HouseholdView: View {
                     VStack(spacing: 0) {
                         ForEach(members) { member in
                             memberRow(member)
-                            if member.id != members.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                            if member.id != members.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
                         }
                     }
                     .card(padding: 0)
@@ -62,7 +62,7 @@ struct HouseholdView: View {
                 }
                 .card()
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle("Household")
         .navigationBarTitleDisplayMode(.inline)
@@ -110,10 +110,10 @@ struct HouseholdView: View {
     }
 
     private func subtitle(_ member: Member) -> String {
-        var parts = [member.role.capitalized]
+        var parts = [Words.id(member.role)]
         if member.hidden { parts.append("Hidden") }
-        if let used = member.lastUsedAt, let date = ISO8601DateFormatter.withFraction.date(from: used) {
-            parts.append("Last seen \(date.formatted(.dateTime.day().month(.abbreviated)))")
+        if let used = member.lastUsedAt, DateText.parse(used) != nil {
+            parts.append("Last seen \(When.day(used))")
         } else {
             parts.append("Not used yet")
         }
@@ -143,15 +143,9 @@ struct HouseholdView: View {
     }
 
     private func endTime(_ iso: String) -> String {
-        guard let date = ISO8601DateFormatter.withFraction.date(from: iso) else { return "it ends" }
-        return Self.clock.string(from: date)
+        guard let date = DateText.parse(iso) else { return "it ends" }
+        return When.time(date)
     }
-
-    private static let clock: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter
-    }()
 
     private func load() async {
         do {

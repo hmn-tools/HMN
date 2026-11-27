@@ -38,32 +38,11 @@ enum ReviewText {
         }
     }
 
-    /** `2026-11-11T04:39:00.000Z` reads as `11/11 12:39` in the phone's zone. */
-    static func shortDate(_ iso: String?) -> String {
-        guard let iso else { return "" }
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return iso }
-        let out = DateFormatter()
-        out.dateFormat = "d/M HH:mm"
-        return out.string(from: date)
-    }
+    /** A stored instant reads as "Today 12:39" in the phone's zone and clock. See `When`. */
+    static func shortDate(_ iso: String?) -> String { When.dayAndTime(iso) }
 
-    /** `2026-12-11T04:39:00.000Z` and `2026-12-11` read as `11/12/2026`. An end date needs its year. */
-    static func day(_ iso: String?) -> String {
-        guard let iso else { return "" }
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let out = DateFormatter()
-        out.dateFormat = "d/M/yyyy"
-        if let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) { return out.string(from: date) }
-        // A day with no time is a day in the phone's own zone, so it is not moved by a zone offset.
-        let dayOnly = DateFormatter()
-        dayOnly.locale = Locale(identifier: "en_US_POSIX")
-        dayOnly.dateFormat = "yyyy-MM-dd"
-        if iso.count == 10, let date = dayOnly.date(from: iso) { return out.string(from: date) }
-        return iso
-    }
+    /** A stored day or instant reads as "Fri 13 Nov", or "13 Nov 2027" in another year. See `When`. */
+    static func day(_ iso: String?) -> String { When.day(iso) }
 
     /** "1 person", "3 people", "2 tasks". */
     static func counted(_ count: Int, _ type: String) -> String {

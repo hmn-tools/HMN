@@ -12,12 +12,6 @@ struct TodayView: View {
     /// True while a knock waits for an answer. The time of the last knock that got none.
     @State private var knocking = false
     @State private var lastKnock: Date?
-    /// 24-hour time with seconds, so each knock shows a new time.
-    private static let knockTime: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter
-    }()
     @State private var loaded = false
     @State private var note: String?
     /// The task that the owner completed last, so that one tap takes it back.
@@ -68,7 +62,7 @@ struct TodayView: View {
             // The line stays above the pager, so that the owner sees it on a long day.
             if let toast {
                 MessageLine(text: toast, isError: true)
-                    .padding(.horizontal, 20).padding(.top, 6)
+                    .padding(.horizontal, 16).padding(.top, 6)
                     .transition(.opacity)
                     .task(id: toast) {
                         try? await Task.sleep(nanoseconds: 4_000_000_000)
@@ -162,7 +156,7 @@ struct TodayView: View {
                 .padding(.bottom, 4)
                 ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
                     row(item, in: section)
-                        .overlay(alignment: .top) { if index > 0 { Theme.rule.frame(height: 1) } }
+                        .overlay(alignment: .top) { if index > 0 { Theme.hair.frame(height: 1) } }
                 }
             }
             .padding(.horizontal, 16)
@@ -179,7 +173,7 @@ struct TodayView: View {
                         Text("What it held, and your note.").font(Theme.small).foregroundStyle(Theme.stone)
                     }
                     Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
                 }
                 .padding(.horizontal, 16)
                 .frame(minHeight: 60)
@@ -340,7 +334,7 @@ struct TodayView: View {
                 .font(Theme.text).foregroundStyle(Theme.graphite)
             if let lastKnock, !knocking {
                 // The knock got no answer. Say so, with the time, so the person knows the tap did something.
-                Text("No answer at \(Self.knockTime.string(from: lastKnock)). Still asleep.")
+                Text("No answer at \(When.timeWithSeconds(lastKnock)). Still asleep.")
                     .font(Theme.small).foregroundStyle(Theme.stone)
                     .transition(.opacity)
             }
@@ -553,15 +547,8 @@ struct TodayView: View {
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
         } else if item.glyph == "dashed" {
             Circle().stroke(Theme.tealDark, style: StrokeStyle(lineWidth: 1.5, dash: [3, 3])).frame(width: 24, height: 24)
-        } else if item.done {
-            Image(systemName: "checkmark")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(Theme.ink)
-                .frame(width: 24, height: 24)
-                .background(Theme.teal)
-                .clipShape(Circle())
         } else {
-            Circle().stroke(Theme.stone, lineWidth: 1.5).frame(width: 24, height: 24)
+            DoneMark(done: item.done)
         }
     }
 }

@@ -18,13 +18,13 @@ struct ActivityView: View {
                     VStack(spacing: 0) {
                         ForEach(items) { item in
                             row(item)
-                            if item.id != items.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                            if item.id != items.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
                         }
                     }
                     .card(padding: 0)
                 }
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle("Activity")
         .background(Theme.ground.ignoresSafeArea())
@@ -55,7 +55,7 @@ struct ActivityView: View {
 
     private func line(_ item: ActivityItem) -> String {
         let when = ReviewText.shortDate(item.undoneAt ?? item.decidedAt)
-        return [name(item), outcome(item), item.tier, when].filter { !$0.isEmpty }.joined(separator: " · ")
+        return [name(item), outcome(item), Words.id(item.tier), when].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     private func name(_ item: ActivityItem) -> String {

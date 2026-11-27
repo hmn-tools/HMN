@@ -34,7 +34,7 @@ struct AreasView: View {
                     VStack(spacing: 0) {
                         ForEach(areas) { area in
                             areaCard(area)
-                            if area.id != areas.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                            if area.id != areas.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
                         }
                     }
                     .card(padding: 0)
@@ -42,9 +42,9 @@ struct AreasView: View {
 
                 SmallLabel(text: "Add an area").padding(.top, 10)
                 VStack(alignment: .leading, spacing: 12) {
-                    TextField("Name, for example Work", text: $areaTitle).textFieldStyle(FieldStyle()).autocorrectionDisabled()
+                    TextField(hint: "Name, for example Work", text: $areaTitle).textFieldStyle(FieldStyle()).autocorrectionDisabled()
                     picker("Kind", selection: $areaKind, options: kindsOf("area").map { ($0.kind, $0.title) })
-                    picker("Tier", selection: $areaTier, options: tiers.map { ($0, $0.isEmpty ? "From the kind" : $0.capitalized) })
+                    picker("Tier", selection: $areaTier, options: tiers.map { ($0, $0.isEmpty ? "From the kind" : Words.id($0)) })
                     Text(tierNote).font(Theme.small).foregroundStyle(Theme.stone)
                     Button("Add the area") { Task { await addArea() } }
                         .buttonStyle(PillButtonStyle())
@@ -57,13 +57,13 @@ struct AreasView: View {
                     let list = kindsOf(type)
                     if !list.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(type.capitalized).font(Theme.label).foregroundStyle(Theme.stone)
+                            Text(Words.type(type)).font(Theme.label).foregroundStyle(Theme.stone)
                                 .padding(.horizontal, Theme.Space.l).padding(.top, Theme.Space.m).padding(.bottom, 4)
                             ForEach(list) { kind in
                                 kindRow(kind)
                                     .padding(.horizontal, Theme.Space.l)
                                     .frame(minHeight: 52)
-                                if kind.id != list.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                                if kind.id != list.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
                             }
                         }
                         .card(padding: 0)
@@ -72,9 +72,9 @@ struct AreasView: View {
 
                 SmallLabel(text: "Add a kind").padding(.top, 10)
                 VStack(alignment: .leading, spacing: 12) {
-                    picker("For", selection: $kindType, options: types.map { ($0, $0.capitalized) })
-                    TextField("Name, for example Studio", text: $kindTitle).textFieldStyle(FieldStyle()).autocorrectionDisabled()
-                    picker("Role", selection: $kindRole, options: [("", "No role")] + (roles[kindType] ?? []).map { ($0, $0.capitalized) })
+                    picker("For", selection: $kindType, options: types.map { ($0, Words.id($0)) })
+                    TextField(hint: "Name, for example Studio", text: $kindTitle).textFieldStyle(FieldStyle()).autocorrectionDisabled()
+                    picker("Role", selection: $kindRole, options: [("", "No role")] + (roles[kindType] ?? []).map { ($0, Words.id($0)) })
                     Text(AreasView.roleNote(type: kindType, role: kindRole.isEmpty ? nil : kindRole))
                         .font(Theme.small).foregroundStyle(Theme.stone)
                     Button("Add the kind") { Task { await addKind() } }
@@ -83,11 +83,12 @@ struct AreasView: View {
                 }
                 .card()
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle("Areas and kinds")
+        .navigationBarTitleDisplayMode(.inline)
         .alert("Rename \(renaming?.title ?? "the kind")", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Name", text: $newTitle)
+            TextField(hint: "Name", text: $newTitle)
             Button("Save") {
                 if let kind = renaming { Task { await rename(kind) } }
                 renaming = nil
@@ -116,7 +117,7 @@ struct AreasView: View {
         let tier = area.properties?.childTier ?? "personal"
         let kindName = kind?.title ?? (area.kind ?? "No kind")
         // The kind is named only when it differs from the area, so "Work" is not "Work · Work".
-        let line = kindName.lowercased() == area.title.lowercased() ? tier.capitalized : "\(kindName) · \(tier.capitalized)"
+        let line = kindName.lowercased() == area.title.lowercased() ? Words.id(tier) : "\(kindName) · \(Words.id(tier))"
         return VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline) {
                 Text(area.title).font(Theme.row)
@@ -152,7 +153,7 @@ struct AreasView: View {
 
     private func kindLine(_ kind: KindInfo) -> String {
         var parts: [String] = []
-        if let role = kind.role { parts.append(role.capitalized) }
+        if let role = kind.role { parts.append(Words.id(role)) }
         if kind.core { parts.append("built in") }
         parts.append(kind.inUse == 0 ? "not used" : "\(kind.inUse) in use")
         return parts.joined(separator: " · ")
@@ -162,7 +163,7 @@ struct AreasView: View {
 
     /// What the server does when the owner gives no tier.
     private var tierNote: String {
-        guard areaTier.isEmpty else { return "Items here are \(areaTier.capitalized)." }
+        guard areaTier.isEmpty else { return "Items here are \(Words.id(areaTier))." }
         switch kinds.first(where: { $0.type == "area" && $0.kind == areaKind })?.role {
         case "health", "money": return "Items are Sealed."
         case "family": return "Items are Private."
@@ -202,7 +203,7 @@ struct AreasView: View {
     private func field(_ label: String, placeholder: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label.uppercased()).font(Theme.font(10)).foregroundStyle(Theme.stone)
-            TextField(placeholder, text: text).font(Theme.font(14)).autocorrectionDisabled()
+            TextField(hint: placeholder, text: text).font(Theme.font(14)).autocorrectionDisabled()
         }
     }
 
@@ -236,7 +237,7 @@ struct AreasView: View {
         defer { working = false }
         do {
             let made = try await session.client().createArea(title: areaTitle.trimmingCharacters(in: .whitespaces), kind: areaKind, childTier: areaTier.isEmpty ? nil : areaTier)
-            message = "Added \(made.title). Its items are \((made.properties?.childTier ?? "personal").capitalized)."
+            message = "Added \(made.title). Its items are \(Words.id(made.properties?.childTier ?? "personal"))."
             areaTitle = ""
             areaTier = ""
             await load()

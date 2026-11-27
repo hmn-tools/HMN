@@ -48,7 +48,7 @@ struct BatchView: View {
                     .padding(.top, 8)
                 }
             }
-            .padding(22)
+            .padding(16)
         }
         .background(Theme.ground.ignoresSafeArea())
         .navigationTitle("Review")
@@ -89,15 +89,15 @@ struct BatchView: View {
 
     private func detail(_ proposal: Proposal) -> String {
         if proposal.redacted { return "Sealed. Open the vault to read it." }
-        var parts = [ReviewText.operation(proposal.op), proposal.payload?.entity?.type].compactMap { $0 }
+        var parts = [ReviewText.operation(proposal.op), proposal.payload?.entity?.type.map(Words.type)].compactMap { $0 }
         if let summary = proposal.summary {
             // Each field that the approval writes, as the server names it.
             parts += summary.lines.map { line in
                 line.was.map { "\(line.label.lowercased()) \(line.text) (was \($0))" } ?? "\(line.label.lowercased()) \(line.text)"
             }
         } else {
-            parts.append(proposal.tier)
-            if let due = proposal.payload?.entity?.dueAt { parts.append("due \(due.prefix(10))") }
+            parts.append(Words.id(proposal.tier))
+            if let due = proposal.payload?.entity?.dueAt { parts.append("due \(When.day(due))") }
         }
         return parts.joined(separator: " · ")
     }

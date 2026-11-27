@@ -5,6 +5,7 @@ enum AppTab { case today, people, projects, agents }
 struct RootView: View {
     @EnvironmentObject private var session: Session
     @Environment(\.scenePhase) private var phase
+    @Environment(\.dynamicTypeSize) private var dynamicType
     @State private var tab: AppTab = .today
 
     var body: some View {
@@ -75,8 +76,8 @@ struct RootView: View {
     /// The tab bar is one white pill above the ground. The plus is the one ink circle on it.
     private var tabBar: some View {
         HStack(spacing: 0) {
-            tabButton(.today, "Today")
-            tabButton(.people, "People")
+            tabButton(.today, "Today", symbol: "sun.max")
+            tabButton(.people, "People", symbol: "person.2")
             Button { session.showCapture = true } label: {
                 Image(systemName: "plus")
                     .font(.title3.weight(.semibold))
@@ -87,8 +88,8 @@ struct RootView: View {
             }
             .padding(.horizontal, 4)
             .accessibilityLabel("Capture")
-            tabButton(.projects, "Projects")
-            tabButton(.agents, "Review", count: session.waiting)
+            tabButton(.projects, "Projects", symbol: "square.stack")
+            tabButton(.agents, "Review", symbol: "tray", count: session.waiting)
         }
         .padding(.horizontal, 8)
         .frame(height: 64)
@@ -99,25 +100,38 @@ struct RootView: View {
         .padding(.bottom, 4)
     }
 
-    private func tabButton(_ value: AppTab, _ title: String, count: Int = 0) -> some View {
+    /// At the largest text sizes the bar shows icons only, so that a label never wraps or is cut.
+    private var iconsOnly: Bool { dynamicType >= .accessibility1 }
+
+    private func tabButton(_ value: AppTab, _ title: String, symbol: String, count: Int = 0) -> some View {
         Button { tab = value } label: {
-            HStack(spacing: 4) {
-                Text(title)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                if count > 0 {
-                    // A small count when something waits. It is the one mark on the bar that is not a tab.
-                    Text(count > 99 ? "99+" : "\(count)")
-                        .font(Theme.sans(10, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.paper)
-                        .padding(.horizontal, 5)
-                        .frame(minWidth: 16, minHeight: 16)
-                        .background(Theme.tealDark)
-                        .clipShape(Capsule())
+            VStack(spacing: 2) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: symbol)
+                        .font(.system(size: 18, weight: .regular))
+                        .frame(height: 22)
+                    if count > 0 {
+                        // A small count when something waits. It is the one mark on the bar that is not a tab.
+                        Text(count > 99 ? "99+" : "\(count)")
+                            .font(Theme.sans(10, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.paper)
+                            .padding(.horizontal, 5)
+                            .frame(minWidth: 16, minHeight: 16)
+                            .background(Theme.tealDark)
+                            .clipShape(Capsule())
+                            .offset(x: 12, y: -6)
+                    }
+                }
+                if !iconsOnly {
+                    Text(title)
+                        .font(Theme.sans(11, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        // The label keeps its size at large text, as far as the bar allows.
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 }
             }
-            .font(Theme.sans(13, weight: .medium))
             .foregroundStyle(tab == value ? Theme.ink : Theme.stone)
             .frame(maxWidth: .infinity, minHeight: 48)
             .background(tab == value ? Theme.ground : Color.clear)

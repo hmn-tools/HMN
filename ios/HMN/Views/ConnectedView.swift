@@ -19,7 +19,7 @@ struct ConnectedView: View {
                 if loaded && live.isEmpty { EmptyState(title: "Nothing connected.") }
                 ForEach(live) { item in card(item) }
             }
-            .padding(22)
+            .padding(16)
         }
         .background(Theme.ground.ignoresSafeArea())
         .task { await load() }
@@ -56,7 +56,7 @@ struct ConnectedView: View {
                 }
             }
             ForEach(item.reads.prefix(3)) { read in
-                Text("Read \(read.title ?? read.type) · \(ReviewText.shortDate(read.at))")
+                Text("Read \(read.title ?? Words.type(read.type)) · \(ReviewText.shortDate(read.at))")
                     .font(Theme.small).foregroundStyle(Theme.graphite)
                     .lineLimit(1)
             }
@@ -76,7 +76,7 @@ struct ConnectedView: View {
 
     private func line(_ item: Connection) -> String {
         let used = item.lastAccess.map { "used \(ReviewText.shortDate($0))" } ?? "not used yet"
-        return [Self.kind(item), item.tierCap.capitalized, used].joined(separator: " · ")
+        return [Self.kind(item), Words.id(item.tierCap), used].joined(separator: " · ")
     }
 
     /// The server names a key "mcp" whether it is the owner key, an agent key, or an outside client.
@@ -130,34 +130,44 @@ struct JournalView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 if let entry {
-                    Text(entry.name).font(Theme.font(18, weight: .semibold))
-                    Text("\(entry.at) · \(entry.model)").font(Theme.font(12)).foregroundStyle(Theme.stone)
-                    Text(entry.why).font(Theme.font(13)).foregroundStyle(Theme.graphite)
-                    Text("READ").font(Theme.font(10)).foregroundStyle(Theme.stone)
-                    if entry.read.isEmpty { Text("Nothing to show.").font(Theme.font(12)).foregroundStyle(Theme.stone) }
-                    ForEach(entry.read) { item in
-                        Text(item.title).font(Theme.font(14))
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(entry.name).font(Theme.heading)
+                        Text("\(When.dayAndTime(entry.at)) · \(entry.model)").font(Theme.small).foregroundStyle(Theme.stone)
+                        Text(entry.why).font(Theme.text).foregroundStyle(Theme.graphite)
                     }
-                    Text("PROPOSED").font(Theme.font(10)).foregroundStyle(Theme.stone).padding(.top, 6)
-                    if entry.proposed.isEmpty { Text("No proposal to show.").font(Theme.font(12)).foregroundStyle(Theme.stone) }
-                    ForEach(entry.proposed) { item in
-                        Text(item.title).font(Theme.font(14))
-                        if let reason = item.reason {
-                            Text(reason).font(Theme.font(12)).foregroundStyle(Theme.graphite)
+                    .card()
+                    VStack(alignment: .leading, spacing: 8) {
+                        SmallLabel(text: "Read")
+                        if entry.read.isEmpty { Text("Nothing to show.").font(Theme.small).foregroundStyle(Theme.stone) }
+                        ForEach(entry.read) { item in
+                            Text(item.title).font(Theme.text)
                         }
                     }
+                    .card()
+                    VStack(alignment: .leading, spacing: 8) {
+                        SmallLabel(text: "Proposed")
+                        if entry.proposed.isEmpty { Text("No proposal to show.").font(Theme.small).foregroundStyle(Theme.stone) }
+                        ForEach(entry.proposed) { item in
+                            Text(item.title).font(Theme.text)
+                            if let reason = item.reason {
+                                Text(reason).font(Theme.small).foregroundStyle(Theme.graphite)
+                            }
+                        }
+                    }
+                    .card()
                     if entry.hidden {
-                        Text("Partly hidden.").font(Theme.font(12)).foregroundStyle(Theme.stone)
+                        Text("Partly hidden.").font(Theme.small).foregroundStyle(Theme.stone)
                     }
                 } else {
-                    Text(message).font(Theme.font(13)).foregroundStyle(Theme.graphite)
+                    Text(message).font(Theme.text).foregroundStyle(Theme.graphite)
                 }
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle("Journal")
+        .navigationBarTitleDisplayMode(.inline)
         .background(Theme.ground.ignoresSafeArea())
         .task { await load() }
     }
@@ -188,18 +198,18 @@ struct ReadsView: View {
                         ForEach(Array(reads.enumerated()), id: \.offset) { index, read in
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(line(read)).font(Theme.row).lineLimit(2)
-                                Text([ReviewText.shortDate(read.at), read.tier?.capitalized].compactMap { $0 }.joined(separator: " · "))
+                                Text([ReviewText.shortDate(read.at), read.tier.map(Words.id)].compactMap { $0 }.joined(separator: " · "))
                                     .font(Theme.small).foregroundStyle(Theme.stone)
                             }
-                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
                             .padding(.horizontal, Theme.Space.l)
-                            if index < reads.count - 1 { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                            if index < reads.count - 1 { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
                         }
                     }
                     .card(padding: 0)
                 }
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle(name)
         .navigationBarTitleDisplayMode(.inline)
@@ -211,9 +221,9 @@ struct ReadsView: View {
     /// "Read Book the dentist", or "Searched: dentist".
     private func line(_ read: ClientRead) -> String {
         switch read.action {
-        case "read": return "Read \(read.title ?? read.type ?? "a row")"
+        case "read": return "Read \(read.title ?? read.type.map(Words.type) ?? "a row")"
         case "search": return "Searched: \(read.title ?? "")"
-        default: return "\(read.action.capitalized): \(read.title ?? "")"
+        default: return "\(Words.id(read.action)): \(read.title ?? "")"
         }
     }
 

@@ -24,7 +24,7 @@ struct RulesView: View {
                         let sources = policy.sources.sorted { (ReviewText.rank($0.source), $0.source) < (ReviewText.rank($1.source), $1.source) }
                         ForEach(sources) { source in
                             sourceRow(source, policy)
-                            if source.id != sources.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                            if source.id != sources.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
                         }
                     }
                     .card(padding: 0)
@@ -43,7 +43,7 @@ struct RulesView: View {
                                 }
                                 .padding(.horizontal, Theme.Space.l)
                                 .frame(minHeight: 60)
-                                if rule.id != fine.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                                if rule.id != fine.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
                             }
                         }
                         .card(padding: 0)
@@ -59,7 +59,7 @@ struct RulesView: View {
                     LoadingState()
                 }
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle("Rules")
         .background(Theme.ground.ignoresSafeArea())
@@ -118,8 +118,8 @@ struct RulesView: View {
 
     private func scope(_ rule: PolicyRule) -> String {
         [rule.op == "*" ? "every operation" : ReviewText.operation(rule.op),
-         rule.entityType == "*" ? "every type" : rule.entityType,
-         rule.tier == "*" ? "every tier" : rule.tier].joined(separator: " · ")
+         rule.entityType == "*" ? "every type" : Words.type(rule.entityType),
+         rule.tier == "*" ? "every tier" : Words.id(rule.tier)].joined(separator: " · ")
     }
 
     /** The name of a source. For a key, the list from the server has the name that the owner gave it. */

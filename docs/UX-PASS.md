@@ -52,7 +52,9 @@ All nine items are in the app. The client keeps one connection with an 8 second 
 8. **The vault** can be opened from Privacy, and the phone knows when it closes.
 9. **Messages next to their control**, or a short toast, never at the foot of a long page.
 
-## Batch 4: look and feel
+## Batch 4: look and feel. Done on 2026-11-27.
+
+All ten items are in the app. The rules are in [UX.md](UX.md), "One grammar for the app". Left: the member tab bar (Home, Lists, Family) has words only, and a link in a proposal with no name shows its id.
 
 1. One screen inset (16 points) on every screen.
 2. One date formatter: "Today", "Tomorrow", "Fri 13 Nov", "13 Nov 2027", and the phone's own clock.

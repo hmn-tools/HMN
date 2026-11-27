@@ -67,6 +67,7 @@ struct FamilyTasksView: View {
         let done = tasks.filter { $0.task.isDone }
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                RootTitle("Family")
                 if !loaded && message == nil { LoadingState() }
                 if loaded && tasks.isEmpty && routines.isEmpty {
                     Text("No family tasks yet.").font(Theme.font(14)).foregroundStyle(Theme.graphite).padding(.top, 12)
@@ -84,9 +85,9 @@ struct FamilyTasksView: View {
                 if let note { MessageLine(text: note) }
                 if let message { MessageLine(text: message, isError: true) }
             }
-            .padding(22)
+            .padding(16)
         }
-        .navigationTitle("Family")
+        .toolbar(.hidden, for: .navigationBar)
         .background(Theme.ground.ignoresSafeArea())
         .sheet(item: $editing, onDismiss: { Task { await load() } }) { routine in
             RoutineEditSheet(routine: routine).themed()
@@ -108,7 +109,7 @@ struct FamilyTasksView: View {
         VStack(spacing: 0) {
             ForEach(list) { entry in
                 HStack(spacing: 4) {
-                    TickButton(done: entry.task.isDone) { Task { await toggle(entry) } }
+                    TickButton(done: entry.task.isDone, title: entry.task.title) { Task { await toggle(entry) } }
                     NavigationLink {
                         FamilyTaskDetailView(entry: entry)
                     } label: {
@@ -121,7 +122,7 @@ struct FamilyTasksView: View {
                                 Text(FamilyTaskDetailView.subtitle(entry)).font(Theme.small).foregroundStyle(Theme.stone)
                             }
                             Spacer()
-                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
                         }
                         .contentShape(Rectangle())
                     }
@@ -130,7 +131,7 @@ struct FamilyTasksView: View {
                 .padding(.leading, 6)
                 .padding(.trailing, Theme.Space.l)
                 .frame(minHeight: 60)
-                if entry.id != list.last?.id { Theme.rule.frame(height: 1).padding(.leading, 54) }
+                if entry.id != list.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
             }
         }
         .card(padding: 0)
@@ -142,7 +143,7 @@ struct FamilyTasksView: View {
             ForEach(routines) { routine in
                 HStack(spacing: 4) {
                     if routine.dueToday {
-                        TickButton(done: routine.doneToday) { Task { await tick(routine) } }
+                        TickButton(done: routine.doneToday, title: routine.habit.title, routine: true) { Task { await tick(routine) } }
                     } else {
                         Image(systemName: "minus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.hair).frame(width: 44, height: 44)
                             .accessibilityLabel("Not today")
@@ -177,7 +178,7 @@ struct FamilyTasksView: View {
                         Button("Remove", role: .destructive) { removing = routine }
                     }
                 }
-                if routine.id != routines.last?.id { Theme.rule.frame(height: 1).padding(.leading, 54) }
+                if routine.id != routines.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
             }
         }
         .card(padding: 0)
@@ -242,7 +243,7 @@ struct NewRoutineCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             SmallLabel(text: "New routine")
-            TextField("Feed the cat, pack the school bag", text: $title)
+            TextField(hint: "Feed the cat, pack the school bag", text: $title)
                 .textFieldStyle(FieldStyle())
                 .submitLabel(.done)
             if people.isEmpty {
@@ -314,23 +315,20 @@ struct FamilyTaskDetailView: View {
                 if let note { MessageLine(text: note) }
                 if let message { MessageLine(text: message, isError: true) }
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle("Family task")
         .navigationBarTitleDisplayMode(.inline)
         .background(Theme.ground.ignoresSafeArea())
     }
 
-    /// "Sam, Alex · 1 of 2 steps · due 1/12", or "Done by Sam · 23/11 18:02".
+    /// "Sam, Alex · 1 of 2 steps · due Tomorrow", or "Done by Sam · Today 18:02".
     static func subtitle(_ entry: FamilyTask, steps showSteps: Bool = true) -> String {
         if let line = entry.task.doneLine { return line }
         var parts = [entry.people.map(\.title).joined(separator: ", ")]
         let steps = entry.steps.open + entry.steps.done
         if showSteps && steps > 0 { parts.append("\(entry.steps.done) of \(steps) steps") }
-        if let due = entry.task.dueAt, due.count >= 10 {
-            let day = due.prefix(10).split(separator: "-")
-            if day.count == 3, let d = Int(day[2]), let m = Int(day[1]) { parts.append("due \(d)/\(m)") }
-        }
+        if let due = entry.task.dueAt, !due.isEmpty { parts.append("due \(When.day(due))") }
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
@@ -369,9 +367,10 @@ struct MemberSettingsView: View {
                     }
                     Button("Forget this phone") { confirmForget = true }.buttonStyle(TextButtonStyle(danger: true))
                 }
-                .padding(22)
+                .padding(16)
             }
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
             .background(Theme.ground.ignoresSafeArea())
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
             .confirmationDialog("Forget this phone?", isPresented: $confirmForget, titleVisibility: .visible) {
@@ -420,7 +419,7 @@ struct RoutineEditSheet: View {
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 6) {
                         SmallLabel(text: "Name")
-                        TextField("Name", text: $title).textFieldStyle(FieldStyle())
+                        TextField(hint: "Name", text: $title).textFieldStyle(FieldStyle())
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         SmallLabel(text: "For")

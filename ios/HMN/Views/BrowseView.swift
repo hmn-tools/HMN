@@ -7,6 +7,8 @@ struct BrowseView: View {
     var empty: String
     /// A kind that has its own screen, such as `list`, is left out here.
     var hiddenKind: String? = nil
+    /// True when the screen is a tab root: it shows its own large title and hides the navigation bar.
+    var root = false
     @State private var rows: [Entity] = []
     @State private var message: String?
     @State private var loaded = false
@@ -20,6 +22,12 @@ struct BrowseView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                if root {
+                    RootTitle(title) {
+                        if canMake { RootAddButton(label: "New \(Words.type(type).lowercased())") { making = true } }
+                    }
+                    .padding(.bottom, 12)
+                }
                 if !loaded { LoadingState() }
                 if loaded && rows.isEmpty {
                     Text(message ?? empty).font(Theme.font(14)).foregroundStyle(Theme.graphite).padding(.top, 12)
@@ -43,7 +51,7 @@ struct BrowseView: View {
                                     }
                                     .padding(.horizontal, Theme.Space.l)
                                     .frame(minHeight: 60)
-                                    if row.id != rows.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                                    if row.id != rows.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
                                 }
                                 .contentShape(Rectangle())
                             }
@@ -63,10 +71,12 @@ struct BrowseView: View {
             }
             .padding(16)
         }
-        .navigationTitle(title)
+        .navigationTitle(root ? "" : title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(root ? .hidden : .automatic, for: .navigationBar)
         .background(Theme.ground.ignoresSafeArea())
         .toolbar {
-            if canMake {
+            if canMake && !root {
                 ToolbarItem(placement: .primaryAction) {
                     Button { making = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("New \(Words.type(type).lowercased())")
@@ -91,8 +101,8 @@ struct BrowseView: View {
     private func line(_ row: Entity) -> String {
         var parts: [String] = []
         if let kind = schema?.kindTitle(row.type, row.kind) { parts.append(kind) }
-        if let due = row.dueAt, !due.isEmpty, let date = DateText.parse(due) {
-            parts.append(date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+        if let due = row.dueAt, !due.isEmpty, DateText.parse(due) != nil {
+            parts.append(When.day(due))
         } else if let status = row.status, !status.isEmpty, status != "open", status != "active" {
             parts.append(Words.id(status))
         }
@@ -121,7 +131,7 @@ struct BrowseView: View {
                     let open = links.filter { $0.peer.type == "task" && $0.rel == "part_of" }
                         .compactMap { byId[$0.peer.id] }
                         .filter { !$0.isDone }
-                    if open.isEmpty { return (project.id, project.status == "active" ? "Nothing open" : (project.status ?? "").capitalized) }
+                    if open.isEmpty { return (project.id, project.status == "active" ? "Nothing open" : Words.id(project.status ?? "")) }
                     var line = open.count == 1 ? "1 open" : "\(open.count) open"
                     if let next = open.compactMap(\.dueAt).min() { line += " · next \(ReviewText.day(next))" }
                     return (project.id, line)

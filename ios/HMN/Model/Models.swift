@@ -71,19 +71,13 @@ struct Entity: Codable, Identifiable, Hashable {
 
     var isDone: Bool { status == "done" }
 
-    /// "Done by you · 23/11 18:02", or nil when the task is open.
+    /// "Done by you · Today 18:02", or nil when the task is open.
     var doneLine: String? {
         guard isDone else { return nil }
         let who = properties?.doneBy.map { $0 == "owner" ? "you" : $0 } ?? "you"
-        guard let at = properties?.doneAt, let date = ISO8601DateFormatter.withFraction.date(from: at) else { return "Done by \(who)" }
-        return "Done by \(who) · \(Entity.doneFormat.string(from: date))"
+        guard let at = properties?.doneAt, DateText.parse(at) != nil else { return "Done by \(who)" }
+        return "Done by \(who) · \(When.dayAndTime(at))"
     }
-
-    private static let doneFormat: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d/M HH:mm"
-        return formatter
-    }()
 }
 
 extension ISO8601DateFormatter {
@@ -549,8 +543,8 @@ struct Routine: Codable, Identifiable {
         var parts = [people.map(\.title).joined(separator: ", ")]
         if doneToday {
             var line = "Done"
-            if let at = habit.properties?.checkedAt, let date = ISO8601DateFormatter.withFraction.date(from: at) {
-                line += " " + Routine.clock.string(from: date)
+            if let at = habit.properties?.checkedAt, let date = DateText.parse(at) {
+                line += " " + When.time(date)
             }
             // "by Luca" on Luca's own routine says nothing. A tick by someone else names them.
             if let who = habit.properties?.checkedBy, !people.contains(where: { $0.title == who }) { line += " by " + (who == "owner" ? "you" : who) }
@@ -561,12 +555,6 @@ struct Routine: Codable, Identifiable {
         }
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
     }
-
-    private static let clock: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter
-    }()
 }
 
 struct RoutineList: Codable {

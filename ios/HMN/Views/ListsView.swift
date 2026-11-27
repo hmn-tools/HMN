@@ -11,7 +11,7 @@ struct ProjectsHome: View {
             } else if mode == "family" {
                 FamilyTasksView()
             } else {
-                BrowseView(type: "project", title: "Projects", empty: "No projects yet.", hiddenKind: "list")
+                BrowseView(type: "project", title: "Projects", empty: "No projects yet.", hiddenKind: "list", root: true)
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -21,7 +21,7 @@ struct ProjectsHome: View {
                 Button("Family") { mode = "family" }.buttonStyle(ChipButtonStyle(selected: mode == "family"))
                 Spacer()
             }
-            .padding(.horizontal, 22)
+            .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background(Theme.ground)
         }
@@ -41,6 +41,7 @@ struct ListsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                RootTitle("Lists")
                 if !loaded { LoadingState() }
                 if loaded && lists.isEmpty {
                     Text("No lists yet.").font(Theme.font(14)).foregroundStyle(Theme.graphite).padding(.top, 12)
@@ -54,20 +55,20 @@ struct ListsView: View {
                                 listRow(entry)
                             }
                             .buttonStyle(.plain)
-                            if entry.id != lists.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                            if entry.id != lists.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
                         }
                     }
                     .card(padding: 0)
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     SmallLabel(text: "New list")
-                    TextField("Groceries, packing, gifts", text: $newTitle)
+                    TextField(hint: "Groceries, packing, gifts", text: $newTitle)
                         .textFieldStyle(FieldStyle())
                         .submitLabel(.done)
                         .onSubmit { Task { await create() } }
                     HStack(spacing: 6) {
                         ForEach(["household", "personal", "private"], id: \.self) { tier in
-                            Button(tier.capitalized) { newTier = tier }.buttonStyle(ChipButtonStyle(selected: newTier == tier))
+                            Button(Words.id(tier)) { newTier = tier }.buttonStyle(ChipButtonStyle(selected: newTier == tier))
                         }
                     }
                     Button("Start the list") { Task { await create() } }
@@ -78,9 +79,9 @@ struct ListsView: View {
                 if let note { MessageLine(text: note) }
                 if let message { MessageLine(text: message, isError: true) }
             }
-            .padding(22)
+            .padding(16)
         }
-        .navigationTitle("Lists")
+        .toolbar(.hidden, for: .navigationBar)
         .background(Theme.ground.ignoresSafeArea())
         // A list changes in its own screen. Read again each time this one shows.
         .onAppear { Task { await load() } }
@@ -91,11 +92,11 @@ struct ListsView: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.list.title).font(Theme.row).foregroundStyle(Theme.ink)
-                Text("\(entry.items.isEmpty ? "Empty" : entry.open == 0 ? "All done" : "\(entry.open) open") · \(entry.list.tier.capitalized)")
+                Text("\(entry.items.isEmpty ? "Empty" : entry.open == 0 ? "All done" : "\(entry.open) open") · \(Words.id(entry.list.tier))")
                     .font(Theme.small).foregroundStyle(Theme.stone)
             }
             Spacer()
-            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
+            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
         }
         .padding(.horizontal, Theme.Space.l)
         .frame(minHeight: 60)
@@ -171,7 +172,7 @@ struct ItemsEditor: View {
         VStack(alignment: .leading, spacing: 12) {
             if let label { SmallLabel(text: label) }
             HStack(spacing: 8) {
-                TextField(placeholder, text: $newItem)
+                TextField(hint: placeholder, text: $newItem)
                     .textFieldStyle(FieldStyle())
                     .focused($adding)
                     .submitLabel(.done)
@@ -206,7 +207,7 @@ struct ItemsEditor: View {
         VStack(spacing: 0) {
             ForEach(list) { item in
                 HStack(spacing: 4) {
-                    TickButton(done: item.isDone) { Task { await toggle(item) } }
+                    TickButton(done: item.isDone, title: item.title) { Task { await toggle(item) } }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.title)
                             .font(Theme.row)
@@ -231,12 +232,12 @@ struct ItemsEditor: View {
                         Button("Delete", role: .destructive) { deleting = item }
                     }
                 }
-                if item.id != list.last?.id { Theme.rule.frame(height: 1).padding(.leading, 54) }
+                if item.id != list.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
             }
         }
         .card(padding: 0)
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Name", text: $renameText)
+            TextField(hint: "Name", text: $renameText)
             Button("Save") {
                 if let item = renaming { Task { await rename(item) } }
                 renaming = nil
@@ -311,26 +312,41 @@ struct ItemsEditor: View {
     }
 }
 
-/// A round tick, 44 points to tap. Teal with a check when done.
+/// The one done mark of the app: a filled check circle in dark teal. An open item has an empty circle.
+struct DoneMark: View {
+    var done: Bool
+    var body: some View {
+        if done {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(Theme.tealDark)
+                .frame(width: 24, height: 24)
+        } else {
+            Circle().stroke(Theme.stone, lineWidth: 1.5).frame(width: 24, height: 24)
+        }
+    }
+}
+
+/// A round tick, 44 points to tap. It names its task for VoiceOver. A routine checks in, and a task is marked done.
 struct TickButton: View {
     var done: Bool
+    var title: String
+    var routine = false
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            ZStack {
-                Circle()
-                    .stroke(done ? Theme.teal : Theme.graphite, lineWidth: 1.5)
-                    .frame(width: 24, height: 24)
-                if done {
-                    Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.teal)
-                }
-            }
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
+            DoneMark(done: done)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(done ? "Done. Tap to open again." : "Mark done")
+        .accessibilityLabel(label)
+    }
+
+    private var label: String {
+        if routine { return done ? "Done: \(title). Tap to take it back." : "Check in: \(title)" }
+        return done ? "Done: \(title). Tap to open again." : "Mark as done: \(title)"
     }
 }
 

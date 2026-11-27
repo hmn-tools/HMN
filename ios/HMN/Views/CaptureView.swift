@@ -22,7 +22,7 @@ struct CaptureView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    TextField("A thought, a task, a link. Tag with #.", text: $text, axis: .vertical)
+                    TextField(hint: "A thought, a task, a link. Tag with #.", text: $text, axis: .vertical)
                         .lineLimit(3...6)
                         .textFieldStyle(FieldStyle())
                         .focused($typing)
@@ -90,7 +90,7 @@ struct CaptureView: View {
                     Button("Person") { Task { await make(item, "person") } }.buttonStyle(ChipButtonStyle())
                 }
                 SmallLabel(text: "Or keep it as a note about")
-                TextField("Find a person, a project, a thing", text: $fileQuery)
+                TextField(hint: "Find a person, a project, a thing", text: $fileQuery)
                     .textFieldStyle(FieldStyle())
                     .onChange(of: fileQuery) { _, value in Task { await lookUp(value) } }
                 ForEach(fileHits) { hit in
@@ -105,7 +105,7 @@ struct CaptureView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                TextField("Change the #tags", text: $retag, axis: .vertical)
+                TextField(hint: "Change the #tags", text: $retag, axis: .vertical)
                     .textFieldStyle(FieldStyle())
                 HStack(spacing: 20) {
                     Button("Save tags") { Task { await retag(item) } }

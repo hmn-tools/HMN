@@ -15,7 +15,7 @@ struct SearchView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    TextField("Search your HMN", text: $query)
+                    TextField(hint: "Search your HMN", text: $query)
                         .textFieldStyle(FieldStyle())
                         .focused($typing)
                         .submitLabel(.search)
@@ -82,7 +82,7 @@ struct SearchView: View {
             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
         }
         .padding(.horizontal, 16)
-        .frame(minHeight: 56)
+        .frame(minHeight: 60)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) { Theme.hair.frame(height: 1).padding(.leading, 16) }
     }

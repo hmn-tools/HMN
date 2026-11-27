@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AgentsView: View {
     @EnvironmentObject private var session: Session
+    @Environment(\.dynamicTypeSize) private var dynamicType
     @State private var proposals: [Proposal] = []
     @State private var message: String?
     @State private var editing = false
@@ -126,7 +127,7 @@ struct AgentsView: View {
     /// "Trip helper · new task", "Trip helper · change", "Trip helper · removal", "Trip helper · link".
     private func headline(_ proposal: Proposal) -> String {
         switch proposal.op {
-        case "create": return "\(proposal.agentName) · new \(proposal.payload?.entity?.type ?? "item")"
+        case "create": return "\(proposal.agentName) · new \(proposal.payload?.entity?.type.map { Words.type($0).lowercased() } ?? "item")"
         case "update": return "\(proposal.agentName) · change"
         case "delete": return "\(proposal.agentName) · removal"
         default: return "\(proposal.agentName) · link"
@@ -148,9 +149,9 @@ struct AgentsView: View {
                 ForEach(Array(summary.lines.enumerated()), id: \.offset) { _, line in
                     labeled(line.label) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(line.text).font(Theme.text)
+                            Text(words(line.text, for: line.label)).font(Theme.text)
                             if let was = line.was {
-                                Text("Was: \(was)").font(Theme.small).foregroundStyle(Theme.stone)
+                                Text("Was: \(words(was, for: line.label))").font(Theme.small).foregroundStyle(Theme.stone)
                             }
                         }
                     }
@@ -162,7 +163,7 @@ struct AgentsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else if let due = proposal.payload?.entity?.dueAt {
-                labeled("Due") { Text(due).font(Theme.text) }
+                labeled("Due") { Text(When.day(due)).font(Theme.text) }
             }
             if proposal.summary == nil, let links = proposal.payload?.links, !links.isEmpty {
                 labeled("Links") {
@@ -191,10 +192,29 @@ struct AgentsView: View {
         .card(padding: 18)
     }
 
+    /// A stored value in words: a tier, a status, or a kind as a word, and a date as the app writes dates.
+    private func words(_ text: String, for label: String) -> String {
+        switch label.lowercased() {
+        case "tier", "status", "kind", "area", "type": return Words.id(text)
+        case "due", "date", "starts", "ends": return When.day(text)
+        default: return text
+        }
+    }
+
+    /// The label sits beside its value. At the largest text sizes it sits above, so that no word splits.
     private func labeled<Value: View>(_ label: String, @ViewBuilder value: () -> Value) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            SmallLabel(text: label).frame(width: 66, alignment: .leading)
-            value()
+        Group {
+            if dynamicType >= .accessibility1 {
+                VStack(alignment: .leading, spacing: 4) {
+                    SmallLabel(text: label)
+                    value()
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    SmallLabel(text: label).frame(width: 66, alignment: .leading)
+                    value()
+                }
+            }
         }
     }
 
@@ -255,7 +275,7 @@ struct AgentsView: View {
                     editField("Reason", text: $reason)
                     if let message { MessageLine(text: message, isError: true) }
                 }
-                .padding(22)
+                .padding(16)
             }
             .navigationTitle("Edit first")
             .background(Theme.ground.ignoresSafeArea())
@@ -274,7 +294,7 @@ struct AgentsView: View {
     private func editField(_ label: String, text: Binding<String>, hint: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             SmallLabel(text: label)
-            TextField(hint ?? label, text: text, axis: .vertical).textFieldStyle(FieldStyle())
+            TextField(hint: hint ?? label, text: text, axis: .vertical).textFieldStyle(FieldStyle())
         }
     }
 

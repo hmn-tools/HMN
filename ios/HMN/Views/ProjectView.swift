@@ -40,7 +40,7 @@ struct ProjectPageView: View {
                 }
                 if let message { MessageLine(text: message, isError: true) }
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle("Project")
         .navigationBarTitleDisplayMode(.inline)
@@ -56,7 +56,7 @@ struct ProjectPageView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            SmallLabel(text: project?.status?.capitalized ?? "Project")
+            SmallLabel(text: project?.status.map(Words.id) ?? "Project")
             Text(project?.title ?? title).font(Theme.heading)
             if let body = project?.body, !body.isEmpty {
                 Text(body).font(Theme.text).foregroundStyle(Theme.graphite).fixedSize(horizontal: false, vertical: true)
@@ -71,12 +71,12 @@ struct ProjectPageView: View {
 
     private var addField: some View {
         HStack(spacing: 8) {
-            TextField("Add a task", text: $newTask)
+            TextField(hint: "Add a task", text: $newTask)
                 .textFieldStyle(FieldStyle())
                 .submitLabel(.done)
                 .onSubmit { Task { await add() } }
             Button("Add") { Task { await add() } }
-                .buttonStyle(ChipButtonStyle(selected: true))
+                .buttonStyle(ChipButtonStyle(solid: true))
                 .disabled(newTask.trimmingCharacters(in: .whitespaces).isEmpty || working)
         }
     }
@@ -85,7 +85,7 @@ struct ProjectPageView: View {
         VStack(spacing: 0) {
             ForEach(rows) { task in
                 HStack(spacing: 4) {
-                    TickButton(done: task.isDone) { Task { await complete(task) } }
+                    TickButton(done: task.isDone, title: task.title) { Task { await complete(task) } }
                     NavigationLink {
                         EntityDetailView(type: "task", id: task.id)
                     } label: {
@@ -97,7 +97,7 @@ struct ProjectPageView: View {
                                 }
                             }
                             Spacer()
-                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
                         }
                         .contentShape(Rectangle())
                     }
@@ -105,8 +105,8 @@ struct ProjectPageView: View {
                 }
                 .padding(.leading, 6)
                 .padding(.trailing, Theme.Space.l)
-                .frame(minHeight: 56)
-                if task.id != rows.last?.id { Theme.rule.frame(height: 1).padding(.leading, 54) }
+                .frame(minHeight: 60)
+                if task.id != rows.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
             }
         }
         .card(padding: 0)
@@ -121,17 +121,17 @@ struct ProjectPageView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(link.peer.title).font(Theme.row).foregroundStyle(Theme.ink)
-                            Text(link.peer.type.capitalized).font(Theme.small).foregroundStyle(Theme.stone)
+                            Text(Words.type(link.peer.type)).font(Theme.small).foregroundStyle(Theme.stone)
                         }
                         Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
                     }
                     .padding(.horizontal, Theme.Space.l)
-                    .frame(minHeight: 56)
+                    .frame(minHeight: 60)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                if link.id != others.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                if link.id != others.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
             }
         }
         .card(padding: 0)

@@ -34,7 +34,7 @@ struct KeysView: View {
                     }
                     Text(isView ? "Reads Public only. For a screen." : "Reads up to Personal, and proposes.")
                         .font(Theme.small).foregroundStyle(Theme.stone)
-                    TextField(isView ? "kitchen" : "research", text: $name)
+                    TextField(hint: isView ? "kitchen" : "research", text: $name)
                         .textFieldStyle(FieldStyle())
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                     Button("Make the key") { Task { await create() } }
@@ -43,7 +43,7 @@ struct KeysView: View {
                 }
                 .card()
             }
-            .padding(22)
+            .padding(16)
         }
         .background(Theme.ground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
@@ -122,7 +122,7 @@ struct KeysView: View {
         // The kind of key, the tier it reads, its end, and its last use. A local agent key needs no kind word.
         var parts: [String] = []
         if readsOnly(key) { parts.append("View") } else if key.guest == true { parts.append("Guest") } else if key.outside { parts.append("Outside") }
-        parts.append(key.ceiling.capitalized)
+        parts.append(Words.id(key.ceiling))
         if key.freeBusy == true { parts.append("busy times") }
         if key.state != "active" { parts.append(key.state) }
         else if let ends = key.expiresAt { parts.append("ends \(ReviewText.day(ends))") }
@@ -211,7 +211,7 @@ struct GrantView: View {
                         Text(headline(preview)).font(Theme.heading)
                         Text(breakdown(preview)).font(Theme.text).foregroundStyle(Theme.graphite)
                         ForEach(Array(preview.examples.enumerated()), id: \.offset) { _, item in
-                            Text("\(item.title) · \(item.type)").font(Theme.text)
+                            Text("\(item.title) · \(Words.type(item.type))").font(Theme.text)
                         }
                     }
                     .card()
@@ -237,7 +237,7 @@ struct GrantView: View {
                 }
                 if let message { Text(message).font(Theme.font(12)).foregroundStyle(Theme.graphite) }
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle("Give Private")
         .background(Theme.ground.ignoresSafeArea())

@@ -15,6 +15,7 @@ struct PeopleView: View {
         let organisations = people.filter(\.organisation)
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                RootTitle("People") { RootAddButton(label: "New person") { making = true } }
                 if !loaded && message == nil { LoadingState() }
                 if loaded && people.isEmpty {
                     Text(message ?? "No one here yet.").font(Theme.font(14)).foregroundStyle(Theme.graphite).padding(.top, 12)
@@ -26,15 +27,9 @@ struct PeopleView: View {
                 }
                 if let message, !people.isEmpty { MessageLine(text: message, isError: true) }
             }
-            .padding(22)
+            .padding(16)
         }
-        .navigationTitle("People")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { making = true } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("New person")
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $making) {
             NewRecordSheet(type: "person") { made in opened = made }.themed()
         }
@@ -61,14 +56,14 @@ struct PeopleView: View {
                             }
                         }
                         Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
                     }
                     .padding(.horizontal, Theme.Space.l)
                     .frame(minHeight: 60)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                if entry.id != list.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                if entry.id != list.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
             }
         }
         .card(padding: 0)
@@ -107,12 +102,12 @@ struct PersonPageView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .card()
                 HStack(spacing: 8) {
-                    TextField("A task for \(firstName)", text: $newTask)
+                    TextField(hint: "A task for \(firstName)", text: $newTask)
                         .textFieldStyle(FieldStyle())
                         .submitLabel(.done)
                         .onSubmit { Task { await addTask() } }
                     Button("Add") { Task { await addTask() } }
-                        .buttonStyle(ChipButtonStyle(selected: true))
+                        .buttonStyle(ChipButtonStyle(solid: true))
                         .disabled(newTask.trimmingCharacters(in: .whitespaces).isEmpty || working)
                 }
                 if let page {
@@ -136,7 +131,7 @@ struct PersonPageView: View {
                 }
                 if let message { MessageLine(text: message, isError: true) }
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle(page?.organisation == true ? "Organisation" : "Person")
         .navigationBarTitleDisplayMode(.inline)
@@ -167,14 +162,14 @@ struct PersonPageView: View {
                                 }
                             }
                             Spacer()
-                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
                         }
                         .padding(.horizontal, Theme.Space.l)
-                        .frame(minHeight: 56)
+                        .frame(minHeight: 60)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    if row.id != rows.last?.id { Theme.rule.frame(height: 1).padding(.leading, Theme.Space.l) }
+                    if row.id != rows.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
                 }
             }
             .card(padding: 0)
@@ -186,7 +181,7 @@ struct PersonPageView: View {
         VStack(spacing: 0) {
             ForEach(rows) { row in
                 HStack(spacing: 4) {
-                    TickButton(done: row.entity.isDone) { Task { await complete(row.entity) } }
+                    TickButton(done: row.entity.isDone, title: row.entity.title) { Task { await complete(row.entity) } }
                     NavigationLink {
                         EntityDetailView(type: "task", id: row.entity.id)
                     } label: {
@@ -196,7 +191,7 @@ struct PersonPageView: View {
                                 if let line = subtitle(row) { Text(line).font(Theme.small).foregroundStyle(Theme.stone) }
                             }
                             Spacer()
-                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone)
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
                         }
                         .contentShape(Rectangle())
                     }
@@ -204,8 +199,8 @@ struct PersonPageView: View {
                 }
                 .padding(.leading, 6)
                 .padding(.trailing, Theme.Space.l)
-                .frame(minHeight: 56)
-                if row.id != rows.last?.id { Theme.rule.frame(height: 1).padding(.leading, 54) }
+                .frame(minHeight: 60)
+                if row.id != rows.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
             }
         }
         .card(padding: 0)
@@ -216,7 +211,7 @@ struct PersonPageView: View {
             ForEach(routines) { routine in
                 HStack(spacing: 4) {
                     if routine.dueToday {
-                        TickButton(done: routine.doneToday) { Task { await tick(routine) } }
+                        TickButton(done: routine.doneToday, title: routine.habit.title, routine: true) { Task { await tick(routine) } }
                     } else {
                         Image(systemName: "minus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.hair).frame(width: 44, height: 44)
                             .accessibilityLabel("Not today")
@@ -230,8 +225,8 @@ struct PersonPageView: View {
                 }
                 .padding(.leading, 6)
                 .padding(.trailing, Theme.Space.l)
-                .frame(minHeight: 56)
-                if routine.id != routines.last?.id { Theme.rule.frame(height: 1).padding(.leading, 54) }
+                .frame(minHeight: 60)
+                if routine.id != routines.last?.id { Theme.hair.frame(height: 1).padding(.leading, Theme.Space.l) }
             }
         }
         .card(padding: 0)
@@ -241,7 +236,7 @@ struct PersonPageView: View {
     private func subtitle(_ row: PersonPage.Linked) -> String? {
         if let line = row.entity.doneLine { return line }
         if let when = row.when { return when }
-        return row.entity.kind.map { $0.replacingOccurrences(of: "_", with: " ").capitalized }
+        return row.entity.kind.map(Words.id)
     }
 
     private func load() async {

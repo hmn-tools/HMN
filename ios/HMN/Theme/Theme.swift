@@ -13,11 +13,11 @@ enum Theme {
 
     // Ground and surfaces
     static let ground = adaptive(0xEAEAE7, 0x121211)
-    static let card = adaptive(0xFFFFFF, 0x1E1E1C)
+    static let card = adaptive(0xFFFFFF, 0x252523)
     /// Text on ink. In dark mode ink is light, so this is dark.
     static let paper = adaptive(0xF4F4F2, 0x121211)
     /// A pressed surface, and a fill inside a card.
-    static let paper2 = adaptive(0xEAEAE7, 0x2A2A27)
+    static let paper2 = adaptive(0xEAEAE7, 0x30302D)
 
     // Text
     static let ink = adaptive(0x0D0D0D, 0xEDEDEA)
@@ -26,9 +26,9 @@ enum Theme {
     static let stone = adaptive(0x595956, 0x9E9E98)
 
     // Lines
-    static let hair = adaptive(0xD3D3CF, 0x3A3A36)
+    static let hair = adaptive(0xD3D3CF, 0x42423E)
     /// The line between two rows of one card.
-    static let rule = adaptive(0xECECE9, 0x2C2C29)
+    static let rule = adaptive(0xECECE9, 0x383835)
 
     // The washed accents. Teal is the "alive" colour. The other three are the band.
     static let teal = adaptive(0x6FA8A0, 0x7DB8AF)
@@ -214,7 +214,7 @@ struct PillButtonStyle: ButtonStyle {
         }
 
         private var foreground: Color {
-            if !enabled { return Theme.stone }
+            if !enabled { return Theme.graphite }
             switch kind {
             case .primary: return Theme.paper
             case .secondary: return Theme.ink
@@ -253,6 +253,52 @@ struct MessageLine: View {
     }
 }
 
+/**
+ The title of a tab screen: large, inside the content, with an optional button at the trailing edge.
+ A tab screen hides its navigation bar and uses this. A pushed screen uses an inline navigation title.
+ */
+struct RootTitle<Trailing: View>: View {
+    var title: String
+    var trailing: () -> Trailing
+
+    init(_ title: String, @ViewBuilder trailing: @escaping () -> Trailing) {
+        self.title = title
+        self.trailing = trailing
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(Theme.title).tracking(-0.6).accessibilityAddTraits(.isHeader)
+            Spacer()
+            trailing()
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
+extension RootTitle where Trailing == EmptyView {
+    init(_ title: String) {
+        self.init(title) { EmptyView() }
+    }
+}
+
+/** The plus button at the trailing edge of a tab title. It is 44 points square. */
+struct RootAddButton: View {
+    var label: String
+    var action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .font(.body.weight(.medium))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Theme.ink)
+        .accessibilityLabel(label)
+    }
+}
+
 /** A screen with nothing on it: one line, and one smaller line. */
 struct EmptyState: View {
     var title: String
@@ -266,21 +312,71 @@ struct EmptyState: View {
     }
 }
 
-/** One value of a small choice, such as a tier or a number of days. The selected value is ink. */
+/**
+ One value of a small choice, such as a tier or a number of days. The selected value is quiet: a teal tint,
+ dark teal text, and a thin dark teal edge. Solid ink is for the main action, so `solid` gives the ink
+ look to a small button that acts, such as Add beside a field.
+ */
 struct ChipButtonStyle: ButtonStyle {
     var selected = false
+    var solid = false
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(Theme.sans(14, weight: .medium))
-            .padding(.horizontal, 14)
-            .frame(minHeight: 36)
-            .background(selected ? Theme.ink : Theme.card)
-            .foregroundStyle(selected ? Theme.paper : Theme.ink)
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(Theme.hair, lineWidth: selected ? 0 : 1))
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-            .opacity(configuration.isPressed ? 0.7 : 1)
+        Chip(selected: selected, solid: solid, pressed: configuration.isPressed, label: configuration.label)
+    }
+
+    private struct Chip<Label: View>: View {
+        @Environment(\.isEnabled) private var enabled
+        let selected: Bool
+        let solid: Bool
+        let pressed: Bool
+        let label: Label
+
+        var body: some View {
+            label
+                .font(Theme.sans(14, weight: .medium))
+                .padding(.horizontal, 14)
+                .frame(minHeight: 36)
+                .background(background)
+                .foregroundStyle(foreground)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(edge, lineWidth: 1))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+                .opacity(pressed ? 0.7 : 1)
+        }
+
+        private var background: Color {
+            if solid { return enabled ? Theme.ink : Theme.hair }
+            return selected ? Theme.tealTint : Theme.card
+        }
+
+        private var foreground: Color {
+            if !enabled { return Theme.graphite }
+            if solid { return Theme.paper }
+            return selected ? Theme.tealDark : Theme.ink
+        }
+
+        private var edge: Color {
+            if solid { return .clear }
+            return selected ? Theme.tealDark : Theme.hair
+        }
+    }
+}
+
+/**
+ A field with a placeholder in the stone colour. The system placeholder is too faint on the dark card, so each
+ field of the app is made with `hint:` and not with the plain label.
+ */
+extension TextField where Label == Text {
+    init(hint: String, text: Binding<String>, axis: Axis = .horizontal) {
+        self.init(text: text, prompt: Text(hint).foregroundStyle(Theme.stone), axis: axis) { Text(hint) }
+    }
+}
+
+extension SecureField where Label == Text {
+    init(hint: String, text: Binding<String>) {
+        self.init(text: text, prompt: Text(hint).foregroundStyle(Theme.stone)) { Text(hint) }
     }
 }
 

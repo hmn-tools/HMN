@@ -17,13 +17,13 @@ Each token has a light and a dark value. The phone chooses, from its own appeara
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
 | ground | `#EAEAE7` | `#121211` | The wall behind the cards. |
-| card | `#FFFFFF` | `#1E1E1C` | Each group of rows. |
+| card | `#FFFFFF` | `#252523` | Each group of rows. |
 | ink | `#0D0D0D` | `#EDEDEA` | Text, and the one main button of a screen. |
 | paper | `#F4F4F2` | `#121211` | Text on ink. |
 | graphite | `#434343` | `#C6C6C1` | A sentence under a title. |
 | stone | `#595956` | `#9E9E98` | Labels and second lines. Contrast 5.8 to 1 on the light ground, 6.9 to 1 on the dark ground. |
-| hair | `#D3D3CF` | `#3A3A36` | The edge of a field and of a white button. |
-| rule | `#ECECE9` | `#2C2C29` | The line between two rows of one card. |
+| hair | `#D3D3CF` | `#42423E` | The edge of a field and of a white button. |
+| rule | `#ECECE9` | `#383835` | The line between two rows of one card. |
 | teal | `#6FA8A0` | `#7DB8AF` | Alive: a done mark, a switch, a count. |
 | teal dark | `#3F6F68` | `#8FC8BF` | Teal as text. Contrast 5.7 to 1 on a light card, 7.1 to 1 on a dark card. |
 | teal tint | `#E8F1EF` | `#1E2E2B` | A message, a person chip, the sleeping panel. |
@@ -253,7 +253,7 @@ Settings for these workers is `GET /api/v1/workers.html` on the mini: tier, mode
 
 The card:
 
-- Header band in paper2: "Proposed · new task" and the local time `11/11 12:36`.
+- Header band in paper2: "Proposed · new task" and the local time, "Today 12:36".
 - A tinted row with a teal `+` and the title, for a create. An update shows the new title the same way. A delete uses a plain row and no tint.
 - Due, when present.
 - Linked, as chips. A person chip uses teal tint, teal border, and teal-dark text. Any other chip is white with a hairline border.
@@ -403,3 +403,12 @@ No animation beyond the system sheet. No haptics on approve. No sound. The produ
 ## Accessibility
 
 Ink on paper is the text contrast. Teal is never the only carrier of meaning: quiet rows also say "quiet", the agent mark is also the word Agents and the waiting count, the cursor is next to the screen name. Checkboxes are buttons with the task title as their label. Type sizes follow the table above and scale with Dynamic Type up to the point the card scrolls. The card scrolls vertically; the tab bar and the proposal buttons stay put.
+
+## One grammar for the app (2026-11-27)
+
+- Each screen has a side inset of 16 points.
+- A tab root has a large title in the page. A pushed screen has a small title in the bar.
+- The app writes a date as "Today", "Tomorrow", "Yesterday", "Fri 13 Nov", or "13 Nov 2027", and a time in the phone's own clock. A stored id is never on a screen: "Personal", not "personal".
+- A chosen small chip is teal tint with a teal edge. Solid ink is for the main action only.
+- A row that opens has a chevron. A done task has one mark, a filled teal circle with a tick.
+- The tab bar has an icon and a word for each tab. At the largest text sizes it shows the icons only.

@@ -166,10 +166,10 @@ struct RecordView: View {
                 if !draft.body.isEmpty { Text(draft.body).font(Theme.text).foregroundStyle(Theme.graphite) }
             } else {
                 labeled("Name") {
-                    TextField("Name", text: $draft.title).textFieldStyle(FieldStyle())
+                    TextField(hint: "Name", text: $draft.title).textFieldStyle(FieldStyle())
                 }
                 labeled(type == "note" ? "Text" : "About") {
-                    TextField(type == "note" ? "Write it here" : "Anything to remember", text: $draft.body, axis: .vertical)
+                    TextField(hint: type == "note" ? "Write it here" : "Anything to remember", text: $draft.body, axis: .vertical)
                         .textFieldStyle(FieldStyle())
                         .lineLimit(type == "note" ? 6...20 : 2...10)
                 }
@@ -239,18 +239,18 @@ struct RecordView: View {
         let binding = Binding(get: { draft.fields[spec.key] ?? "" }, set: { draft.fields[spec.key] = $0 })
         switch spec.type {
         case "long":
-            TextField(spec.label, text: binding, axis: .vertical).textFieldStyle(FieldStyle()).lineLimit(2...8)
+            TextField(hint: spec.label, text: binding, axis: .vertical).textFieldStyle(FieldStyle()).lineLimit(2...8)
         case "number":
-            TextField(spec.label, text: binding).textFieldStyle(FieldStyle()).keyboardType(.numberPad)
+            TextField(hint: spec.label, text: binding).textFieldStyle(FieldStyle()).keyboardType(.numberPad)
         case "url":
-            TextField("https://", text: binding).textFieldStyle(FieldStyle())
+            TextField(hint: "https://", text: binding).textFieldStyle(FieldStyle())
                 .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
         case "choice":
             chips([("", "None")] + (spec.choices ?? []).map { ($0, Words.id($0)) }, selection: binding)
         case "date":
             DateField(value: binding)
         default:
-            TextField(spec.label, text: binding).textFieldStyle(FieldStyle())
+            TextField(hint: spec.label, text: binding).textFieldStyle(FieldStyle())
         }
     }
 
@@ -295,7 +295,7 @@ struct RecordView: View {
                         }
                         .padding(.leading, 16)
                         .frame(minHeight: 60)
-                        if link.id != shown.last?.id { Theme.rule.frame(height: 1).padding(.leading, 16) }
+                        if link.id != shown.last?.id { Theme.hair.frame(height: 1).padding(.leading, 16) }
                     }
                 }
                 .card(padding: 0)
@@ -380,7 +380,7 @@ struct RecordView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        if node.id != far.last?.id { Theme.rule.frame(height: 1).padding(.leading, 16) }
+                        if node.id != far.last?.id { Theme.hair.frame(height: 1).padding(.leading, 16) }
                     }
                 }
                 .card(padding: 0)
@@ -601,6 +601,65 @@ enum DateText {
     }
 }
 
+/// The one way the app writes a date for the owner: "Today", "Tomorrow", "Yesterday", "Fri 13 Nov", or
+/// "13 Nov 2027" in another year. A time follows the phone's own 12 or 24 hour setting.
+/// It reads both stored forms (a day and an instant). A string that it cannot read is shown as it came.
+enum When {
+    private static let weekday: DateFormatter = {
+        let format = DateFormatter()
+        format.dateFormat = "EEE d MMM"
+        return format
+    }()
+    private static let withYear: DateFormatter = {
+        let format = DateFormatter()
+        format.dateFormat = "d MMM yyyy"
+        return format
+    }()
+    private static let clock: DateFormatter = {
+        let format = DateFormatter()
+        format.dateStyle = .none
+        format.timeStyle = .short
+        return format
+    }()
+
+    /// A day in words, from a date.
+    static func day(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "Today" }
+        if calendar.isDateInTomorrow(date) { return "Tomorrow" }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        if calendar.isDate(date, equalTo: Date(), toGranularity: .year) { return weekday.string(from: date) }
+        return withYear.string(from: date)
+    }
+
+    /// A day in words, from a stored day or instant. An empty or unreadable value gives its own text.
+    static func day(_ stored: String?) -> String {
+        guard let stored, !stored.isEmpty else { return "" }
+        guard let date = DateText.parse(stored) else { return stored }
+        return day(date)
+    }
+
+    /// The time of day, in the phone's own clock setting.
+    static func time(_ date: Date) -> String { clock.string(from: date) }
+
+    /// The time with seconds, in the phone's own clock setting. Each knock shows a new time.
+    static func timeWithSeconds(_ date: Date) -> String { seconds.string(from: date) }
+    private static let seconds: DateFormatter = {
+        let format = DateFormatter()
+        format.dateStyle = .none
+        format.timeStyle = .medium
+        return format
+    }()
+
+    /// A day and a time, such as "Today 14:05". A stored day with no time shows the day only.
+    static func dayAndTime(_ stored: String?) -> String {
+        guard let stored, !stored.isEmpty else { return "" }
+        guard let date = DateText.parse(stored) else { return stored }
+        if stored.count == 10 { return day(date) }
+        return "\(day(date)) \(time(date))"
+    }
+}
+
 /// Link this record to another: find it, choose how they relate, and add it.
 struct AddLinkSheet: View {
     @EnvironmentObject private var session: Session
@@ -645,7 +704,7 @@ struct AddLinkSheet: View {
                             .buttonStyle(PillButtonStyle())
                             .disabled(working)
                     } else {
-                        TextField("Find a person, a place, a thing", text: $query)
+                        TextField(hint: "Find a person, a place, a thing", text: $query)
                             .textFieldStyle(FieldStyle())
                             .autocorrectionDisabled()
                             .onChange(of: query) { _, text in Task { await find(text) } }
@@ -668,7 +727,7 @@ struct AddLinkSheet: View {
                                         .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
-                                    Theme.rule.frame(height: 1).padding(.leading, 16)
+                                    Theme.hair.frame(height: 1).padding(.leading, 16)
                                 }
                             }
                             .card(padding: 0)
@@ -742,7 +801,7 @@ struct NewRecordSheet: View {
                         }
                     }
                 }
-                TextField("Name", text: $title)
+                TextField(hint: "Name", text: $title)
                     .textFieldStyle(FieldStyle())
                     .submitLabel(.done)
                     .onSubmit { Task { await create() } }

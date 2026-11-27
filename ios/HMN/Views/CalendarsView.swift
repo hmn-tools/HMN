@@ -33,21 +33,21 @@ struct CalendarsView: View {
                 }
                 SmallLabel(text: "Add a calendar").padding(.top, 10)
                 VStack(alignment: .leading, spacing: 12) {
-                    TextField("Name", text: $title).textFieldStyle(FieldStyle()).autocorrectionDisabled()
-                    SecureField("https:// or webcal://", text: $address)
+                    TextField(hint: "Name", text: $title).textFieldStyle(FieldStyle()).autocorrectionDisabled()
+                    SecureField(hint: "https:// or webcal://", text: $address)
                         .textFieldStyle(FieldStyle())
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                     Text("Google calls it the secret address in iCal format. HMN keeps it hidden.")
                         .font(Theme.small).foregroundStyle(Theme.stone)
                     picker("Area", selection: $areaId, options: [("", "None")] + areas.map { ($0.id, $0.title) })
-                    picker("Tier", selection: $tier, options: tiers.map { ($0, $0.isEmpty ? "From the area" : $0.capitalized) })
+                    picker("Tier", selection: $tier, options: tiers.map { ($0, $0.isEmpty ? "From the area" : Words.id($0)) })
                     Button("Add") { Task { await add() } }
                         .buttonStyle(PillButtonStyle())
                         .disabled(address.isEmpty || working)
                 }
                 .card()
             }
-            .padding(22)
+            .padding(16)
         }
         .navigationTitle("Calendars")
         .background(Theme.ground.ignoresSafeArea())
@@ -91,7 +91,7 @@ struct CalendarsView: View {
 
     /// The count of events, the tier, review, and busy times, in one line.
     private func facts(_ calendar: CalendarInfo) -> String {
-        var parts = ["\(calendar.events) events", calendar.eventTier.map { $0.capitalized } ?? "Area tier", calendar.approval == "review" ? "Review" : "Auto"]
+        var parts = ["\(calendar.events) events", calendar.eventTier.map(Words.id) ?? "Area tier", calendar.approval == "review" ? "Review" : "Auto"]
         if calendar.freeBusy == true { parts.append("busy times") }
         return parts.joined(separator: " · ")
     }
@@ -112,7 +112,7 @@ struct CalendarsView: View {
     private func field(_ label: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label.uppercased()).font(Theme.font(10)).foregroundStyle(Theme.stone)
-            TextField(label, text: text).font(Theme.font(14)).autocorrectionDisabled()
+            TextField(hint: label, text: text).font(Theme.font(14)).autocorrectionDisabled()
         }
     }
 
@@ -213,22 +213,22 @@ struct CalendarChangeSheet: View {
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 6) {
                         SmallLabel(text: "Name")
-                        TextField("Name", text: $title).textFieldStyle(FieldStyle()).autocorrectionDisabled()
+                        TextField(hint: "Name", text: $title).textFieldStyle(FieldStyle()).autocorrectionDisabled()
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         SmallLabel(text: "New address")
-                        SecureField(calendar.hasUrl ? "Leave empty to keep it" : "https:// or webcal://", text: $address)
+                        SecureField(hint: calendar.hasUrl ? "Leave empty to keep it" : "https:// or webcal://", text: $address)
                             .textFieldStyle(FieldStyle())
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
                     }
                     choices("Area", selection: $areaId, options: [("", "None")] + areas.map { ($0.id, $0.title) })
-                    choices("Tier of its events", selection: $tier, options: tiers.map { ($0, $0.isEmpty ? "From the area" : $0.capitalized) })
+                    choices("Tier of its events", selection: $tier, options: tiers.map { ($0, $0.isEmpty ? "From the area" : Words.id($0)) })
                     Button(working ? "Saving" : "Save") { Task { await save() } }
                         .buttonStyle(PillButtonStyle())
                         .disabled(working || title.trimmingCharacters(in: .whitespaces).isEmpty)
                     if let message { MessageLine(text: message, isError: true) }
                 }
-                .padding(22)
+                .padding(16)
             }
             .navigationTitle("Change the calendar")
             .navigationBarTitleDisplayMode(.inline)

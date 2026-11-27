@@ -33,7 +33,7 @@ struct PairLinkSheet: View {
                     }
                     if let message { MessageLine(text: message, isError: true) }
                 }
-                .padding(22)
+                .padding(16)
             }
             .navigationTitle("Pair")
             .navigationBarTitleDisplayMode(.inline)
