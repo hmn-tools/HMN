@@ -283,3 +283,18 @@ test("an empty allow list reads nothing, and a null list reads every area", asyn
     app.close();
   }
 });
+
+test("a rotated key keeps its job label and its allow list", async () => {
+  const app = testApp();
+  try {
+    const key = await makeKey(app, { name: "example-rotate", purpose: "Example job", allow_areas: ["area_cars"] });
+    const rotated = await call(app, `/api/v1/credentials/${key.id}/rotate`, { method: "POST", ...owner(app), ip: "127.0.0.1" });
+    expect(rotated.status).toBe(200);
+    const newId = (rotated.json as { id: string }).id;
+    const list = (await call(app, "/api/v1/keys", owner(app))).json as { keys: Array<{ id: string; purpose: string | null; allow_areas?: string[] | null }> };
+    const row = list.keys.find((item) => item.id === newId)!;
+    expect(row.purpose).toBe("Example job");
+  } finally {
+    app.close();
+  }
+});

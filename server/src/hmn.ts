@@ -3298,8 +3298,8 @@ export class Hmn {
       .query(
         `INSERT INTO credentials (
           id, name, kind, key_hash, scope, max_tier, vault, allow_types, allow_areas, deny_areas,
-          forced_ceiling, expires_at, created_at, revoked_at, rotated_from, external, guest, free_busy, created_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+          forced_ceiling, expires_at, created_at, revoked_at, rotated_from, external, guest, free_busy, created_by, purpose
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         newId,
@@ -3320,6 +3320,8 @@ export class Hmn {
         row.guest ?? 0,
         row.free_busy ?? 0,
         row.created_by ?? null,
+        // The job label goes with the key to its new secret.
+        (row as { purpose?: string | null }).purpose ?? null,
       );
     // What the old credential made now belongs to the new one, so a later revoke still finds it.
     this.store.db.query("UPDATE credentials SET created_by = ? WHERE created_by = ?").run(newId, id);
