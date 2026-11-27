@@ -448,6 +448,22 @@ struct ProposedLink: Codable {
     var rel: String?
     var toType: String?
     var toId: String?
+    /// The title of the linked row, when the server could show it to this phone.
+    var title: String?
+}
+
+/// A date that HMN cannot read, in one row. The owner fixes it in the row.
+struct UnreadableDate: Codable, Identifiable, Hashable {
+    var id: String
+    var type: String
+    var title: String?
+    var field: String
+    var value: String
+    var key: String { "\(id):\(field)" }
+}
+
+struct UnreadableDateList: Codable {
+    var dates: [UnreadableDate]
 }
 
 struct ReadSet: Codable {

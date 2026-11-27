@@ -376,9 +376,13 @@ final class APIClient: NSObject, URLSessionDelegate {
     func saveKindFields(type: String, kind: String, fields: [[String: Any]]) async throws {
         let _: Empty = try await sendJSON("/api/v1/kinds/\(try Path.segment(type))/\(try Path.segment(kind))/fields", method: "PUT", surface: "phone", body: ["fields": fields])
     }
-    func agentRequests() async throws -> [AgentRequest] {
-        let list: AgentRequestList = try await send("/api/v1/agent-requests", surface: "phone")
+    func agentRequests(status: String? = nil) async throws -> [AgentRequest] {
+        let list: AgentRequestList = try await send(status.map { "/api/v1/agent-requests?status=\($0)" } ?? "/api/v1/agent-requests", surface: "phone")
         return list.requests
+    }
+    func unreadableDates() async throws -> [UnreadableDate] {
+        let list: UnreadableDateList = try await send("/api/v1/dates/unreadable", surface: "phone")
+        return list.dates
     }
     func setAgentRequest(_ id: String, status: String) async throws {
         let _: Empty = try await send("/api/v1/agent-requests/\(try Path.segment(id))", method: "PATCH", surface: "phone", body: ["status": status])

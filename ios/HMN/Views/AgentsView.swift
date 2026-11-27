@@ -12,6 +12,8 @@ struct AgentsView: View {
     @State private var linkTo = ""
     @State private var linkRel = "about"
     @State private var loaded = false
+    /// The open requests from agents. Zero when there are none, or when this phone cannot read them.
+    @State private var openRequests = 0
     @State private var working = false
     @State private var decided: Decided?
     /// The last decision on a list from Review all. Its approvals can be taken back together.
@@ -91,7 +93,7 @@ struct AgentsView: View {
                 HStack(spacing: 24) {
                     NavigationLink("Activity") { ActivityView() }
                     NavigationLink("Rules") { RulesView() }
-                    NavigationLink("Requests") { AgentRequestsView() }
+                    NavigationLink(openRequests > 0 ? "Requests · \(openRequests)" : "Requests") { AgentRequestsView() }
                     Spacer()
                 }
                 .buttonStyle(TextButtonStyle())
@@ -170,7 +172,7 @@ struct AgentsView: View {
                 labeled("Links") {
                     HStack(spacing: 6) {
                         ForEach(Array(links.enumerated()), id: \.offset) { _, link in
-                            Text(link.toId ?? "").font(Theme.small)
+                            Text(link.title ?? "A row you cannot see").font(Theme.small)
                                 .padding(.horizontal, 10).padding(.vertical, 3)
                                 .background(link.toType == "person" ? Theme.tealTint : Theme.ground)
                                 .foregroundStyle(link.toType == "person" ? Theme.tealDark : Theme.ink)
@@ -300,6 +302,8 @@ struct AgentsView: View {
     }
 
     private func reload() async {
+        // A hidden phone gets an error here. It shows no count and no error.
+        if let open = try? await session.client().agentRequests(status: "open") { openRequests = open.count } else { openRequests = 0 }
         do {
             proposals = try await session.client().proposals().filter { $0.status == "pending" }
             session.waiting = proposals.filter { !$0.redacted }.count

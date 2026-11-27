@@ -39,7 +39,8 @@ struct SettingsView: View {
                     Text(spendLine).font(Theme.small).foregroundStyle(Theme.stone).padding(.horizontal, 4)
                     group("Your record") {
                         row("Calendars") { CalendarsView() }
-                        row("Areas and kinds", last: true) { AreasView() }
+                        row("Areas and kinds") { AreasView() }
+                        row("Dates to fix", last: true) { UnreadableDatesView() }
                     }
                     group("Privacy") {
                         row("Who sees what") { PrivacyView() }

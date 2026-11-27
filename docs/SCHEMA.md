@@ -520,6 +520,7 @@ The surface is `X-HMN-Surface: phone | widget | display | lock | mcp`. Display r
 | `DELETE /api/v1/links/:id` | write | Soft-delete a link. |
 | `GET /api/v1/review/year?year=` | read, write, agent | The yearly review: `year`, `greeting`, `summary`, `closing`, `sections` (as a screen), `note` (the owner's note for the year, or null), and `years` (from the first row to now, the newest first). No `year` means this year. A year after this one gets 422. |
 | `PUT /api/v1/review/year/:year/note` | write, owner | `{ body }`. Makes or changes the one Private note of the year (`properties.year_review`). A member gets 403. |
+| `GET /api/v1/dates/unreadable` | write, owner | `{ dates: [{ id, type, title, field, value }] }`. Each date that HMN cannot read in a live row that the caller can see: `due_at` (field `Date`), and each field of type date, yearly, or expiry. A Sealed row is skipped. At most 200. A member and a hidden key get `403`. |
 | `GET /api/v1/schema` | read, write, agent | `{ statuses, kinds, relations, fields, kind_fields, field_types }`. The statuses of each type, the kinds with their titles, the relations with the words for each direction (`out`, `in`), the typed fields of each type, and the fields that each kind adds. A client builds its editors from this. Only a write key sees `in_use` and `core` on the kinds. See "Typed fields". |
 | `PUT /api/v1/kinds/:type/:kind/fields` | write | `{ fields: [{ label, type, key?, choices? }] }`. The fields that one kind adds. The list replaces the one before. At most 20. A key is made from the label when it is not given. A key of the type's own fields is refused. A value already kept in a row stays when its field goes. |
 | `POST /api/v1/agent-requests` | agent, write | `{ need, why, example? }`. An agent says what it needed and did not have. It changes nothing and grants nothing. The same open need from the same key adds one to `asks`. At most 10 new requests a day for each key (429). A member, a view key, and a hidden key cannot send one. |
@@ -546,7 +547,7 @@ A member's phone writes with the same routes as the owner (`POST /api/v1/:type`,
 | `GET /api/v1/search?q=` | read, write, agent | Title and body, scoped, ranked, limit 40. Each word must match. `&match=any` accepts one matching word. |
 | `GET /api/v1/:type/:id/neighbours?depth=` | read, write, agent | The entities around one entity, to a depth of 1 to 3 links. |
 | `GET /api/v1/access/:id/reads` | write | What one agent key read: each search with its words, and each entity. |
-| `GET /api/v1/proposals?status=pending` | read, write, agent | Pending by default. |
+| `GET /api/v1/proposals?status=pending` | read, write, agent | Pending by default. Each entry in `payload.links` has a `title` when the caller can see the linked row. A row that the caller cannot see has no `title`. |
 | `POST /api/v1/proposals` | write, agent | Create a proposal. An `idempotency_key` in the body, or an `Idempotency-Key` header, makes a retry return the first proposal with 200. |
 | `PATCH /api/v1/proposals/:id` | write | Edit a pending proposal's title, due date, or reason. |
 | `POST /api/v1/proposals/:id/approve` | write | Apply it. |

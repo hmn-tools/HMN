@@ -325,6 +325,7 @@ async function route(hmn: Hmn, req: Request, ip: string | null, fingerprint: str
   if (req.method === "PUT" && pathname === "/api/v1/kinds") return json(hmn.kindSave(access, await readJson(req)));
   if (req.method === "POST" && pathname === "/api/v1/agent-requests") return json(hmn.agentRequest(access, await readJson(req)), 201);
   if (req.method === "GET" && pathname === "/api/v1/agent-requests") return json(hmn.agentRequests(access, url.searchParams.get("status")));
+  if (req.method === "GET" && pathname === "/api/v1/dates/unreadable") return json(hmn.unreadableDates(access));
   if (req.method === "GET" && pathname === "/api/v1/agent-requests/mine") return json(hmn.myRequests(access));
   const requestPath = pathname.match(/^\/api\/v1\/agent-requests\/(req_[A-Za-z0-9_-]+)$/);
   if (req.method === "PATCH" && requestPath) return json(hmn.agentRequestSet(access, requestPath[1]!, await readJson(req)));

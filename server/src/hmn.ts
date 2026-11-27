@@ -1904,6 +1904,33 @@ export class Hmn {
     return { requests: listRequests(this.store.db, status) };
   }
 
+  /**
+   * The dates that HMN cannot read, in the rows that the owner can see: `due_at`, and each field of type date,
+   * yearly, or expiry. A screen skips such a value, so this list is the only place that shows it. A sealed row is skipped.
+   */
+  unreadableDates(access: Access) {
+    assertScope(access, "write");
+    if (access.principal.member) throw new ApiError(403, "forbidden", "The owner sees this list.");
+    assertNotHidden(access);
+    const found: Array<{ id: string; type: string; title: string | null; field: string; value: string }> = [];
+    const shown = (value: unknown) => (typeof value === "string" ? value.slice(0, 60) : JSON.stringify(value) ?? "").slice(0, 60);
+    for (const view of this.visible(access)) {
+      if (view.tier === "sealed") continue;
+      const add = (field: string, value: unknown) => found.push({ id: view.id, type: view.type, title: view.title, field, value: shown(value) });
+      if (view.due_at !== null && view.due_at !== undefined && !readableDue(view.due_at)) add("Date", view.due_at);
+      for (const spec of fieldsFor(this.store.db, view.type, view.kind)) {
+        if (spec.type !== "date" && spec.type !== "yearly" && spec.type !== "expiry") continue;
+        const value = view.properties[spec.key];
+        if (value === undefined || value === null || value === "") continue;
+        const full = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+        const good = typeof value === "string" && (full ? readableDue(value) : spec.type === "yearly" && /^\d{2}-\d{2}$/.test(value) && readableDue(`2000-${value}`));
+        if (!good) add(spec.label, value);
+      }
+    }
+    found.sort((a, b) => (a.title ?? "").localeCompare(b.title ?? "") || a.field.localeCompare(b.field));
+    return { dates: found.slice(0, 200) };
+  }
+
   agentRequestSet(access: Access, id: string, body: Record<string, unknown>) {
     assertScope(access, "write");
     assertNotHidden(access);
@@ -3938,7 +3965,20 @@ export class Hmn {
       const type = typeof entity.type === "string" ? entity.type : row.entity_type;
       if (type && areaDenied({ id: "", type, area_id: areaId }, access, areas)) return null;
     }
-    return { ...view, summary: this.proposalSummary(row, access, payload) };
+    // Each link carries the title of the row it points to, when the caller can see that row. No title is a row that
+    // the caller cannot see, and the app does not say more.
+    let shown: unknown = view.payload;
+    if (Array.isArray(payload.links)) {
+      const areas = this.areaMap();
+      const links = payload.links.map((item) => {
+        const link = asObject(item);
+        const target = typeof link.to_id === "string" && link.to_id ? this.raw(link.to_id) : null;
+        const seen = target ? projectEntity(target, areas, access, this.store.sealedKey) : null;
+        return seen ? { ...link, title: seen.title } : link;
+      });
+      shown = { ...payload, links };
+    }
+    return { ...view, payload: shown, summary: this.proposalSummary(row, access, payload) };
   }
 
   /**
@@ -4748,10 +4788,10 @@ function cleanFields(input: Record<string, unknown>): Record<string, unknown> {
 /** The relations of the graph, with the words for each direction. docs/ONTOLOGY.md, section 2.3. */
 export const RELATIONS: Array<{ rel: string; out: string; in: string }> = [
   { rel: "part_of", out: "Part of", in: "Has" },
-  { rel: "for", out: "For", in: "Is for them" },
-  { rel: "with", out: "With", in: "With them" },
-  { rel: "about", out: "About", in: "About them" },
-  { rel: "at", out: "At", in: "Happens here" },
+  { rel: "for", out: "For", in: "For this" },
+  { rel: "with", out: "With", in: "With this" },
+  { rel: "about", out: "About", in: "About this" },
+  { rel: "at", out: "At", in: "Here" },
   { rel: "in", out: "In", in: "Holds" },
   { rel: "from", out: "From", in: "Gave" },
   { rel: "cares_for", out: "Cares for", in: "Cared for by" },
