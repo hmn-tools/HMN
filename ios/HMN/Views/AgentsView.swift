@@ -91,6 +91,7 @@ struct AgentsView: View {
                 HStack(spacing: 24) {
                     NavigationLink("Activity") { ActivityView() }
                     NavigationLink("Rules") { RulesView() }
+                    NavigationLink("Requests") { AgentRequestsView() }
                     Spacer()
                 }
                 .buttonStyle(TextButtonStyle())

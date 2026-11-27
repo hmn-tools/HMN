@@ -69,7 +69,7 @@ All ten items are in the app. The rules are in [UX.md](UX.md), "One grammar for 
 
 ## Later, and decisions for the owner
 
-1. **Typed fields for each kind.** A small set of field types (text, long text, date, expiry, link, choice, number, person, thing) that a kind adds, kept in properties, shown as a form, and validated on the server. The first version would cover people, assets, and notes.
+1. **Typed fields for each kind. Done on 2026-11-27.** See [SCHEMA.md](SCHEMA.md), "Typed fields". A small set of field types (text, long text, date, expiry, link, choice, number, person, thing) that a kind adds, kept in properties, shown as a form, and validated on the server. The first version would cover people, assets, and notes.
 2. **Expiry as a fact.** An expiry field feeds a Renewals worker and an "Expiring soon" section.
 3. **Hub pages** for things, places, and areas, like the person page.
 4. **Merge and retype**, as proposals with undo.

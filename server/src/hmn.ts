@@ -42,6 +42,8 @@ import { ensureDeviceTables } from "./devices/tables";
 import { ensureExternalTables } from "./external/tables";
 import { readPluginSecret, secretConfigured } from "./plugins/secrets";
 import { readableDue, zoned } from "./time";
+import { ensureRequestTables, fileRequest, listRequests, requestsOfKey, setRequestStatus } from "./requests";
+import { BASE_FIELDS, cleanSpecs, cleanValues, FIELD_TYPES, fieldsFor, kindFieldList } from "./fields";
 import { buildFridge, fridgeWindow, secondsToNextWindow, type FridgeScreen, type FridgeScreenId } from "./fridge";
 import {
   buildAgents,
@@ -146,6 +148,7 @@ export class Hmn {
   ) {
     ensureModelSchema(store.db);
     ensureKindTables(store.db);
+    ensureRequestTables(store.db);
     // Copy the audit tip to the Keychain with each save. The saved file and the copy then describe the same chain.
     const persist = store.persist.bind(store);
     store.persist = (force = false) => {
@@ -1003,7 +1006,26 @@ export class Hmn {
 
   /** What a client needs to show and edit any row: the statuses, the kinds, the relations, and the typed fields. */
   schema(access: Access) {
-    return { statuses: STATUS, kinds: this.kindsList(access).kinds, relations: RELATIONS, fields: FIELDS };
+    // Only the owner sees how many rows use each kind. Another key gets the shape alone.
+    if (access.principal.scope !== "write") return this.schemaForAgent();
+    return { statuses: STATUS, kinds: this.kindsList(access).kinds, relations: RELATIONS, fields: FIELDS, kind_fields: kindFieldList(this.store.db), field_types: FIELD_TYPES };
+  }
+
+  /**
+   * The shape of the record for an agent: the statuses, the kinds with their titles, the relations, and the typed
+   * fields. No counts and no rows, so a read key learns nothing about the owner's data from it.
+   */
+  schemaForAgent() {
+    const kinds = this.kinds().list().map((row) => ({ type: row.type, kind: row.kind, title: row.title, role: row.role }));
+    return { statuses: STATUS, kinds, relations: RELATIONS, fields: FIELDS, kind_fields: kindFieldList(this.store.db), field_types: FIELD_TYPES };
+  }
+
+  /** The type of a row that this writer can see, for a field that names a person or a thing. */
+  private fieldTarget(access: Access, id: string): string | null {
+    const row = this.raw(id);
+    if (!row || row.deleted_at) return null;
+    if (!covers(access.ceiling, ownTier(row, this.areaMap()).tier)) return null;
+    return row.type;
   }
 
   removeLink(access: Access, id: string) {
@@ -1845,6 +1867,49 @@ export class Hmn {
     return this.kindsList(access).kinds.find((row) => row.type === type && row.kind === kind)!;
   }
 
+  /**
+   * An agent says what it needs and does not have. It changes nothing and grants nothing: the owner reads it.
+   * A member uses the app instead, and a hidden key or a read key cannot file one.
+   */
+  agentRequest(access: Access, body: Record<string, unknown>) {
+    if (access.principal.member) throw new ApiError(403, "forbidden", "Tell the owner in person.");
+    if (access.principal.scope === "read") throw new ApiError(403, "forbidden", "This credential cannot send a request.");
+    assertNotHidden(access);
+    const result = fileRequest(this.store.db, this.now(), access.principal.id, access.principal.name, body);
+    this.appendAudit({ actor: access.principal.id, action: "agent_request", tier: null, entity_type: "request", entity_id: result.id, surface: access.surface });
+    this.store.persist();
+    return result;
+  }
+
+  /** The requests of the key that asks. */
+  myRequests(access: Access) {
+    return { requests: requestsOfKey(this.store.db, access.principal.id) };
+  }
+
+  agentRequests(access: Access, status: string | null) {
+    assertScope(access, "write");
+    return { requests: listRequests(this.store.db, status) };
+  }
+
+  agentRequestSet(access: Access, id: string, body: Record<string, unknown>) {
+    assertScope(access, "write");
+    const row = setRequestStatus(this.store.db, this.now(), id, body.status);
+    this.appendAudit({ actor: access.principal.id, action: "agent_request_status", tier: null, entity_type: "request", entity_id: id, surface: access.surface });
+    this.store.persist();
+    return row;
+  }
+
+  /** The fields that one kind adds. The list replaces the one before. A value already kept stays in the row. */
+  kindFieldsSave(access: Access, type: string, kind: string, body: Record<string, unknown>) {
+    assertScope(access, "write");
+    if (!this.kinds().list().some((row) => row.type === type && row.kind === kind)) throw new ApiError(404, "not_found", "Not found.");
+    const fields = cleanSpecs(type, body.fields);
+    this.store.db.query("INSERT OR REPLACE INTO kind_fields (type, kind, fields) VALUES (?, ?, ?)").run(type, kind, JSON.stringify(fields));
+    this.appendAudit({ actor: access.principal.id, action: "kind_fields", tier: null, entity_type: "kind", entity_id: `${type}:${kind}`.slice(0, 80), surface: access.surface });
+    this.store.persist();
+    return { type, kind, fields };
+  }
+
   kindRemove(access: Access, type: string, kind: string) {
     assertScope(access, "write");
     const existing = this.kinds().list().find((row) => row.type === type && row.kind === kind);
@@ -1853,6 +1918,7 @@ export class Hmn {
     const used = this.store.db.query("SELECT COUNT(*) AS n FROM entities WHERE deleted_at IS NULL AND type = ? AND kind = ?").get(type, kind) as { n: number };
     if (used.n > 0) throw new ApiError(409, "in_use", "Entities use this kind. Change their kind first.");
     this.store.db.query("DELETE FROM kinds WHERE type = ? AND kind = ?").run(type, kind);
+    this.store.db.query("DELETE FROM kind_fields WHERE type = ? AND kind = ?").run(type, kind);
     this.appendAudit({ actor: access.principal.id, action: "kind_remove", tier: null, entity_type: "kind", entity_id: `${type}:${kind}`.slice(0, 80), surface: access.surface });
     this.store.persist();
     return { type, kind, removed: true };
@@ -3535,6 +3601,7 @@ export class Hmn {
     this.store.replaceDatabase(parsed.sqlite, parsed.sealedKey);
     // A backup can be from before a table or a column existed.
     ensureKindTables(this.store.db);
+    ensureRequestTables(this.store.db);
     ensureDeviceTables(this.store.db);
     ensureExternalTables(this.store.db);
     ensureApprovalTables(this.store.db);
@@ -3633,6 +3700,12 @@ export class Hmn {
     originRef = "owner",
   ) {
     input = cleanFields(input);
+    // The typed fields of the row's type and kind are checked. A key with no field is kept as it is.
+    if (input.properties !== undefined && input.properties !== null) {
+      const kind = "kind" in input ? ((input.kind as string | null) ?? null) : existing?.kind ?? null;
+      const before = existing ? asObject(this.plain(existing).properties) : {};
+      input = { ...input, properties: cleanValues(fieldsFor(this.store.db, type, kind), asObject(input.properties), before, (ref) => this.fieldTarget(access, ref)) };
+    }
     const areas = this.areaMap();
     if (existing) this.assertCanChange(access, existing, input, areas);
     const areaId = "area_id" in input ? (input.area_id as string | null) : existing?.area_id ?? null;
@@ -4662,28 +4735,7 @@ export const RELATIONS: Array<{ rel: string; out: string; in: string }> = [
  * The typed fields that a person sees and edits for each type, kept in `properties` under the same key. A client
  * shows a form from this list, so no one edits JSON. A key that is not here is kept as it is.
  */
-export const FIELDS: Record<string, Array<{ key: string; label: string; type: "text" | "long" | "date" | "number" | "url" | "choice"; choices?: string[] }>> = {
-  person: [
-    { key: "nickname", label: "Nickname", type: "text" },
-    { key: "birthday", label: "Birthday", type: "date" },
-    { key: "anniversary", label: "Anniversary", type: "date" },
-    { key: "address_line", label: "Address", type: "text" },
-    { key: "last_contact", label: "Last in touch", type: "date" },
-  ],
-  place: [
-    { key: "address_line", label: "Address", type: "text" },
-    { key: "url", label: "Website or map", type: "url" },
-  ],
-  asset: [
-    { key: "model", label: "Make and model", type: "text" },
-    { key: "year", label: "Year", type: "number" },
-    { key: "expires", label: "Renewal or expiry", type: "date" },
-    { key: "url", label: "Manual or folder", type: "url" },
-  ],
-  goal: [{ key: "horizon", label: "Horizon", type: "choice", choices: ["year", "quarter", "open"] }],
-  note: [{ key: "url", label: "Link", type: "url" }],
-  project: [{ key: "outcome", label: "Outcome", type: "text" }],
-};
+export const FIELDS = BASE_FIELDS;
 
 /** A sort key for `due_at`: a time on a day comes before "some time that day", and no date comes last. */
 function dueSortKey(due: string | null): string {

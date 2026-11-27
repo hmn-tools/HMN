@@ -520,7 +520,12 @@ The surface is `X-HMN-Surface: phone | widget | display | lock | mcp`. Display r
 | `DELETE /api/v1/links/:id` | write | Soft-delete a link. |
 | `GET /api/v1/review/year?year=` | read, write, agent | The yearly review: `year`, `greeting`, `summary`, `closing`, `sections` (as a screen), `note` (the owner's note for the year, or null), and `years` (from the first row to now, the newest first). No `year` means this year. A year after this one gets 422. |
 | `PUT /api/v1/review/year/:year/note` | write, owner | `{ body }`. Makes or changes the one Private note of the year (`properties.year_review`). A member gets 403. |
-| `GET /api/v1/schema` | read, write, agent | `{ statuses, kinds, relations, fields }`. The statuses of each type, the kinds with their titles, the relations with the words for each direction (`out`, `in`), and the typed fields of each type (`key`, `label`, `type`: text, long, date, number, url, choice). A client builds its editors from this. See "Archive, note kinds, fields, and links". |
+| `GET /api/v1/schema` | read, write, agent | `{ statuses, kinds, relations, fields, kind_fields, field_types }`. The statuses of each type, the kinds with their titles, the relations with the words for each direction (`out`, `in`), the typed fields of each type, and the fields that each kind adds. A client builds its editors from this. Only a write key sees `in_use` and `core` on the kinds. See "Typed fields". |
+| `PUT /api/v1/kinds/:type/:kind/fields` | write | `{ fields: [{ label, type, key?, choices? }] }`. The fields that one kind adds. The list replaces the one before. At most 20. A key is made from the label when it is not given. A key of the type's own fields is refused. A value already kept in a row stays when its field goes. |
+| `POST /api/v1/agent-requests` | agent, write | `{ need, why, example? }`. An agent says what it needed and did not have. It changes nothing and grants nothing. The same open need from the same key adds one to `asks`. At most 10 new requests a day for each key (429). A member, a view key, and a hidden key cannot send one. |
+| `GET /api/v1/agent-requests?status=` | write | The requests, open first. `status` is `open`, `done`, `dismissed`, or `all`. |
+| `PATCH /api/v1/agent-requests/:id` | write | `{ status }`: `open`, `done`, or `dismissed`. |
+| `GET /api/v1/agent-requests/mine` | agent, write | The requests of the key that asks, and their states. |
 | `GET /api/v1/people` | read, write, agent | Each person, with `line` (the kind, and the next date with them) and `organisation`. People first, by name, then organisations. |
 | `GET /api/v1/person/:id/page` | read, write, agent | The person page: `person`, `kind_title`, `organisation`, `line`, and the linked rows in `next` (events from today, at most 5), `tasks` (open), `done` (the last 14 days), `notes`, `things` (assets and places), `people`, `other`, and `routines`. Each row has `entity`, `rel`, and `when`. A row the caller cannot read is absent. |
 | `GET /api/v1/routines` | read, write, agent | Each habit that is `for` a person, with those people (`for`), its `days`, `due_today`, and `done_today`. By person, then title. |
@@ -606,6 +611,9 @@ Tools:
 | `proposal_status` | The state of one proposal, and the id of the entity after an approval. The key that filed a proposal can always read its state. |
 | `free_busy` | The times in which the owner is busy between two dates. Only for a key that the owner allows. |
 | `capture_inbox` | Put raw text in the inbox. |
+| `describe_schema` | The statuses, the kinds with their titles, the relations, and the typed fields of each type and kind. No counts and no rows. |
+| `request_feature` | Tell the owner what the agent needed and did not have: a tool, a field, a type, a kind, or access. It grants nothing. The same need again adds one to its count. |
+| `my_requests` | The requests of this key, and what the owner did with them. |
 
 Each `propose_*` tool takes an optional `idempotency_key`. The same key from the same source returns the first proposal, with `replayed: true`, and stores nothing.
 
@@ -613,7 +621,7 @@ There is no `create_entity` tool. A model with a write key that wants to save di
 
 Tool calls are checked against the key. A denied area fails the tool with a not-found style message, not the entity body.
 
-A view key gets only the tools that read. The four `propose_*` tools and `capture_inbox` are not in its list, and a call to one of them is refused.
+A view key gets only the tools that read. The four `propose_*` tools, `capture_inbox`, and `request_feature` are not in its list, and a call to one of them is refused.
 
 ## The read format
 
@@ -985,3 +993,34 @@ Added on 2026-11-27, in the pass of [UX-PASS.md](UX-PASS.md), batch 2.
 - **Dates.** `due_at` is a date (YYYY-MM-DD) or a full instant. Another value is refused with 422 `bad_date`. An empty string for `due_at`, `status`, `kind`, or `area_id` is no value.
 - **Areas.** An area that still has items cannot be removed (409 `area_in_use`), because its items take their tier from it.
 - **Inbox.** `POST /api/v1/inbox/<id>/process` with `{ "action": "accept", "route": "task" | "note" | "person" }` makes that item in one step, with no tag. `{ "action": "file", "entity_id": … }` makes a note of the kind `capture` with the text, at the stricter tier of the capture and the record, linked `about` the record.
+
+## Typed fields
+
+Added on 2026-11-27.
+
+A type has a few fields of its own: a person's birthday, an asset's make and model. A kind adds more: a car's registration and insurance, a document's number, holder, and expiry. The values are in `properties`, under the field's key. `GET /api/v1/schema` gives `fields` (each type) and `kind_fields` (each kind that the graph has). A client shows one form: the type's fields, then the kind's. A change of kind keeps every value: the form only shows other fields.
+
+| Field type | A value |
+| --- | --- |
+| `text` | Text, at most 500 characters. |
+| `long` | Text, at most 20,000 characters. |
+| `date` | A day, `2026-12-01`. |
+| `yearly` | A day that comes back each year, such as a birthday: `1990-04-02`, or `04-02` when the year is not known. |
+| `expiry` | A day on which something ends: a passport, an insurance. A client says "Ends in 12 days". |
+| `number` | A number. A number in text is stored as a number. |
+| `url` | A link that starts with `http://` or `https://`. |
+| `choice` | One of the field's `choices`. |
+| `person` | The id of a person that the writer can see. |
+| `thing` | The id of an asset that the writer can see. |
+
+The server checks each value that a write changes, on every path: the owner's write, a member's write, and an approved proposal. A bad value is `422 bad_field` with the field's name and an example. An empty string removes the value. A value that the write does not change is not checked again, so a value from before the checks never blocks a save. A key that has no field is kept as it is.
+
+A new graph has default fields for the kinds `document` (a new asset kind), `car`, `organisation`, `decision`, `fact`, `school`, and `garage`. They are in `server/src/kinds.ts`. The owner changes the list of a kind in Settings > Areas and kinds > Fields, or with `PUT /api/v1/kinds/:type/:kind/fields`. The table `kind_fields` holds one list for each kind.
+
+## Requests from agents
+
+Added on 2026-11-27.
+
+An agent that needs a tool, a field, a type, a kind, or access that it does not have says so with the MCP tool `request_feature`, or `POST /api/v1/agent-requests`. A request changes nothing and grants nothing. The owner reads the requests in Review > Requests, and marks each one done or dismissed. More access is a change in Agents and apps, made by the owner.
+
+The text is the agent's. A screen shows it as data and never acts on it. No other agent reads it. One key can open at most 10 new requests a day, and the same open need from the same key only adds one to its count. The table `agent_requests` holds them, with the key, the agent's name, the need, why, an example, the state, and the count.

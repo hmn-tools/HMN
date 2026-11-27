@@ -63,6 +63,15 @@ enum KeychainStore {
         try saveItem(account: "audit-tip", secret: tip)
     }
 
+    /// The certificate pin of the server whose audit tip is kept. Another server has another chain.
+    static func saveAuditPin(_ pin: String) throws {
+        try saveItem(account: "audit-pin", secret: pin)
+    }
+
+    static func loadAuditPin() -> String? {
+        loadItem(account: "audit-pin")
+    }
+
     static func loadAuditTip() -> String? {
         loadItem(account: "audit-tip")
     }

@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { ensureFieldTables, type FieldSpec } from "./fields";
 
 /**
  * A kind is a row that the owner can add and rename. A role is a fixed word that the rules read.
@@ -65,6 +66,7 @@ export const DEFAULT_KINDS: Seed[] = [
   ["note", "capture", "Capture", null, 1],
   ["place", "home", "Home", null, 0],
   ["place", "other", "Other", null, 1],
+  ["asset", "document", "Document", null, 0],
   ["asset", "other", "Other", null, 1],
 ];
 
@@ -95,6 +97,7 @@ export function ensureKindTables(db: Database) {
       value TEXT NOT NULL
     );
   `);
+  ensureFieldTables(db);
   const count = db.query("SELECT COUNT(*) AS n FROM kinds").get() as { n: number };
   if (count.n > 0) {
     addedKinds(db);
@@ -103,6 +106,7 @@ export function ensureKindTables(db: Database) {
   seedKinds(db, DEFAULT_KINDS);
   db.query("INSERT OR IGNORE INTO meta (key, value) VALUES ('kinds_organisation', '1')").run();
   db.query("INSERT OR IGNORE INTO meta (key, value) VALUES ('kinds_note', '1')").run();
+  db.query("INSERT OR IGNORE INTO meta (key, value) VALUES ('kinds_document', '1')").run();
   // A graph from before this table: keep each kind that a row already uses, so that no row becomes invalid.
   const used = db
     .query(`SELECT DISTINCT type, kind FROM entities WHERE kind IS NOT NULL AND type IN (${KIND_TYPES.map(() => "?").join(",")})`)
@@ -127,6 +131,11 @@ function addedKinds(db: Database) {
     seedKinds(db, DEFAULT_KINDS.filter((row) => row[0] === "note"));
     noteKindsFromProperties(db);
     db.query("INSERT INTO meta (key, value) VALUES ('kinds_note', '1')").run();
+  }
+  // The asset kind `document` came on 2026-11-27: a passport, a licence, a policy. Its fields are in fields.ts.
+  if (!db.query("SELECT 1 FROM meta WHERE key = 'kinds_document'").get()) {
+    seedKinds(db, [["asset", "document", "Document", null, 0]]);
+    db.query("INSERT INTO meta (key, value) VALUES ('kinds_document', '1')").run();
   }
 }
 
@@ -212,3 +221,39 @@ export function roleSets(kinds: Kinds): RoleSets {
     familyPerson: kinds.withRole("person", "family"),
   };
 }
+
+/**
+ * The fields that a kind adds in a new graph, kept here with the other kind words. fields.ts has the checks. The owner can change each list. A list for a kind that the graph
+ * does not have waits until the owner adds that kind.
+ */
+export const DEFAULT_KIND_FIELDS: Array<[type: string, kind: string, fields: FieldSpec[]]> = [
+  ["asset", "document", [
+    { key: "number", label: "Number", type: "text" },
+    { key: "holder", label: "Holder", type: "person" },
+    { key: "issued_by", label: "Issued by", type: "text" },
+    { key: "issued_on", label: "Issued", type: "date" },
+  ]],
+  ["asset", "car", [
+    { key: "registration", label: "Registration", type: "text" },
+    { key: "insurer", label: "Insurer", type: "text" },
+    { key: "insurance_expires", label: "Insurance ends", type: "expiry" },
+    { key: "service_due", label: "Next service", type: "date" },
+    { key: "mileage", label: "Mileage", type: "number" },
+  ]],
+  ["person", "organisation", [
+    { key: "phone", label: "Phone", type: "text" },
+    { key: "email", label: "Email", type: "text" },
+    { key: "reference", label: "Your account or reference", type: "text" },
+    { key: "url", label: "Website", type: "url" },
+  ]],
+  ["note", "decision", [
+    { key: "decided_on", label: "Decided", type: "date" },
+    { key: "revisit_on", label: "Look again", type: "date" },
+  ]],
+  ["note", "fact", [
+    { key: "as_of", label: "True as of", type: "date" },
+    { key: "source", label: "Where it came from", type: "text" },
+  ]],
+  ["place", "school", [{ key: "phone", label: "Phone", type: "text" }]],
+  ["place", "garage", [{ key: "phone", label: "Phone", type: "text" }]],
+];

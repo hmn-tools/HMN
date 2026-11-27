@@ -372,6 +372,17 @@ final class APIClient: NSObject, URLSessionDelegate {
         try await send("/api/v1/kinds", surface: "phone")
     }
     /** A kind with no role is a name only. */
+    /// The fields that one kind adds. The list replaces the one before.
+    func saveKindFields(type: String, kind: String, fields: [[String: Any]]) async throws {
+        let _: Empty = try await sendJSON("/api/v1/kinds/\(try Path.segment(type))/\(try Path.segment(kind))/fields", method: "PUT", surface: "phone", body: ["fields": fields])
+    }
+    func agentRequests() async throws -> [AgentRequest] {
+        let list: AgentRequestList = try await send("/api/v1/agent-requests", surface: "phone")
+        return list.requests
+    }
+    func setAgentRequest(_ id: String, status: String) async throws {
+        let _: Empty = try await send("/api/v1/agent-requests/\(try Path.segment(id))", method: "PATCH", surface: "phone", body: ["status": status])
+    }
     func saveKind(type: String, kind: String, title: String, role: String?) async throws -> KindInfo {
         var body: [String: Any] = ["type": type, "kind": kind, "title": title]
         if let role { body["role"] = role }

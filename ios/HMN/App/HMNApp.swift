@@ -267,6 +267,7 @@ final class Session: ObservableObject {
             setMember(result.member)
             today = nil
             SnapshotStore.clear()
+            await refreshWaiting()
         } catch {
             serverURL = oldURL
             fingerprint = oldPin

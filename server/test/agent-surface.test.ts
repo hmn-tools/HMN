@@ -166,11 +166,11 @@ test("the tool list has read-only labels, and the instructions are short", async
   try {
     expect(INSTRUCTIONS.length).toBeLessThan(2000);
     expect(INSTRUCTIONS).toContain("idempotency_key");
-    expect(READ_ONLY_TOOLS.sort()).toEqual(["free_busy", "get_entity", "list_entities", "list_links", "list_proposals", "neighbours", "proposal_status", "search"]);
+    expect(READ_ONLY_TOOLS.sort()).toEqual(["describe_schema", "free_busy", "get_entity", "list_entities", "list_links", "list_proposals", "my_requests", "neighbours", "proposal_status", "search"]);
     for (const item of TOOLS) {
       expect(item.annotations.destructiveHint).toBe(false);
       expect(item.annotations.openWorldHint).toBe(false);
-      expect(item.name.startsWith("propose_") || item.name === "capture_inbox").toBe(!item.annotations.readOnlyHint);
+      expect(item.name.startsWith("propose_") || item.name === "capture_inbox" || item.name === "request_feature").toBe(!item.annotations.readOnlyHint);
     }
     const hello = await call(app, "/mcp", { method: "POST", key: app.secrets!.agent, body: { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } } });
     const result = (hello.json as { result: { protocolVersion: string; instructions: string } }).result;

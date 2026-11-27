@@ -513,7 +513,17 @@ struct TodayView: View {
             SnapshotStore.savePublic(dueCount: lock.dueCount, title: lock.next?.title ?? "", subtitle: lock.subtitle)
             await LiveEvent.sync(title: lock.next?.title ?? "Nothing coming.", subtitle: lock.subtitle)
             // While the alarm is open, the phone keeps the old tip. That tip is the evidence.
-            if !session.auditAlarm {
+            // The kept tip belongs to one server. A pairing with a server that has another certificate starts a
+            // new chain, so the phone forgets the old tip. A tip from before this check is taken as this server's.
+            let pin = session.fingerprint.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let keptPin = KeychainStore.loadAuditPin()
+            if keptPin == nil { try? KeychainStore.saveAuditPin(pin) }
+            let sameServer = keptPin == nil || keptPin == pin
+            if !sameServer && !session.auditAlarm {
+                let tip = try await session.client().auditTip()
+                try? KeychainStore.saveAuditTip(tip.hash)
+                try? KeychainStore.saveAuditPin(pin)
+            } else if !session.auditAlarm {
                 if let previous = KeychainStore.loadAuditTip() {
                     let check = try await session.client().checkAuditTip(previous)
                     if check.rewritten {

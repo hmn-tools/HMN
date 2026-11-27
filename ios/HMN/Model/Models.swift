@@ -277,6 +277,23 @@ struct KindInfo: Codable, Identifiable {
     var id: String { "\(type):\(kind)" }
 }
 
+/// What an agent asked for and did not have. It is text from the agent: a screen shows it as data.
+struct AgentRequest: Codable, Identifiable, Hashable {
+    var id: String
+    var agentName: String
+    var need: String
+    var why: String
+    var example: String?
+    var status: String
+    var asks: Int
+    var createdAt: String
+    var updatedAt: String
+}
+
+struct AgentRequestList: Codable {
+    var requests: [AgentRequest]
+}
+
 struct KindList: Codable {
     var kinds: [KindInfo]
     var roles: [String: [String]]
@@ -579,6 +596,27 @@ struct AppSchema: Codable {
         var label: String
         var type: String
         var choices: [String]?
+    }
+
+    /// The fields that each kind adds. An older server sends none.
+    var kindFields: [KindFields]?
+
+    struct KindFields: Codable, Hashable {
+        var type: String
+        var kind: String
+        var fields: [FieldSpec]
+    }
+
+    /// The form of one row: the type's own fields, then the fields of its kind.
+    func fields(_ type: String, kind: String?) -> [FieldSpec] {
+        let base = fields[type] ?? []
+        guard let kind, !kind.isEmpty else { return base }
+        return base + (kindFields?.first { $0.type == type && $0.kind == kind }?.fields ?? [])
+    }
+
+    /// Every field that a row of this type can have, whatever its kind, so a change of kind keeps the values.
+    func allFields(_ type: String) -> [FieldSpec] {
+        (fields[type] ?? []) + (kindFields ?? []).filter { $0.type == type }.flatMap(\.fields)
     }
 
     func kinds(of type: String) -> [KindInfo] { kinds.filter { $0.type == type } }

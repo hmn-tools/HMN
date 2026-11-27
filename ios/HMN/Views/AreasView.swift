@@ -141,6 +141,8 @@ struct AreasView: View {
             }
             Spacer()
             HStack(spacing: 16) {
+                NavigationLink("Fields") { KindFieldsView(kind: kind) }
+                    .buttonStyle(TextButtonStyle())
                 Button("Rename") { newTitle = kind.title; renaming = kind }
                     .buttonStyle(TextButtonStyle())
                 if !kind.core && kind.inUse == 0 {
@@ -253,6 +255,7 @@ struct AreasView: View {
         do {
             let made = try await session.client().saveKind(type: kindType, kind: AreasView.slug(name), title: name, role: kindRole.isEmpty ? nil : kindRole)
             message = "Added the kind \(made.title)."
+            await SchemaCache.reload(session)
             kindTitle = ""
             kindRole = ""
             await load()

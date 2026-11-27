@@ -9,6 +9,10 @@ enum SchemaCache {
         value = try? await session.client().schema()
         return value
     }
+    /// Read it again after a change of kinds or fields.
+    static func reload(_ session: Session) async {
+        if let fresh = try? await session.client().schema() { value = fresh }
+    }
 }
 
 /// The record editor keeps its old name, so every page that opens a record still does.
@@ -71,7 +75,9 @@ struct RecordView: View {
     private var statuses: [String] { (schema?.statuses[type] ?? []).filter { $0 != "archived" } }
     private var canArchive: Bool { schema?.statuses[type]?.contains("archived") == true }
     private var isArchived: Bool { entity?.status == "archived" }
-    private var fieldSpecs: [AppSchema.FieldSpec] { schema?.fields[type] ?? [] }
+    private var fieldSpecs: [AppSchema.FieldSpec] { schema?.fields(type, kind: draft.kind) ?? [] }
+    /// The people and the things that a field can name, read once when the form has such a field.
+    @State private var refOptions: [String: [Entity]] = [:]
     private var kinds: [KindInfo] {
         // A list and a step have their own screens. Their kind is not a choice here.
         if type == "task" && entity?.kind == "item" { return [] }
@@ -249,6 +255,17 @@ struct RecordView: View {
             chips([("", "None")] + (spec.choices ?? []).map { ($0, Words.id($0)) }, selection: binding)
         case "date":
             DateField(value: binding)
+        case "yearly":
+            YearlyField(value: binding)
+        case "expiry":
+            VStack(alignment: .leading, spacing: 4) {
+                DateField(value: binding)
+                if let line = ExpiryText.line(binding.wrappedValue) {
+                    Text(line.text).font(Theme.small).foregroundStyle(line.urgent ? Theme.danger : Theme.tealDark)
+                }
+            }
+        case "person", "thing":
+            RefField(value: binding, options: refOptions[spec.type] ?? [], noun: spec.type == "person" ? "a person" : "a thing")
         default:
             TextField(hint: spec.label, text: binding).textFieldStyle(FieldStyle())
         }
@@ -460,7 +477,7 @@ struct RecordView: View {
                 next.dueHasTime = due.contains("T")
                 next.due = DateText.parse(due) ?? Date()
             }
-            for spec in schema?.fields[type] ?? [] {
+            for spec in schema?.allFields(type) ?? [] {
                 if let value = properties[spec.key] {
                     if let number = value as? Double {
                         next.fields[spec.key] = number.rounded() == number ? String(Int(number)) : String(number)
@@ -471,6 +488,10 @@ struct RecordView: View {
             }
             draft = next
             saved = next
+            for wanted in Set((schema?.allFields(type) ?? []).map(\.type)) where wanted == "person" || wanted == "thing" {
+                let entityType = wanted == "person" ? "person" : "asset"
+                if refOptions[wanted] == nil { refOptions[wanted] = (try? await session.client().entities(entityType)) ?? [] }
+            }
             links = (try? await session.client().links(type: type, id: id)) ?? []
             near = try? await session.client().neighbours(type: type, id: id)
             if type != "area" && type != "source" && areas.isEmpty { areas = (try? await session.client().areas()) ?? [] }
@@ -852,4 +873,90 @@ struct NewRecordSheet: View {
 struct UnsavedEditsKey: PreferenceKey {
     static var defaultValue = false
     static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+}
+
+/// A date that comes back each year, such as a birthday. The year can be left out: it is then stored as MM-DD.
+struct YearlyField: View {
+    @Binding var value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Toggle(isOn: Binding(get: { !value.isEmpty }, set: { value = $0 ? DateText.stored(Date(), withTime: false) : "" })) {
+                    Text(value.isEmpty ? "No date" : "On a date").font(Theme.text)
+                }
+                .tint(Theme.tealDark)
+                if !value.isEmpty {
+                    DatePicker("Date", selection: Binding(get: { date }, set: { set($0) }), displayedComponents: [.date])
+                        .labelsHidden()
+                }
+            }
+            if !value.isEmpty {
+                Toggle(isOn: Binding(get: { value.count == 10 }, set: { known in
+                    let full = DateText.stored(date, withTime: false)
+                    value = known ? full : String(full.suffix(5))
+                })) {
+                    Text(value.count == 10 ? "The year is known" : "The year is not known").font(Theme.small).foregroundStyle(Theme.graphite)
+                }
+                .tint(Theme.tealDark)
+            }
+        }
+    }
+
+    private var date: Date {
+        value.count == 5 ? (DateText.parse("2000-\(value)") ?? Date()) : (DateText.parse(value) ?? Date())
+    }
+
+    private func set(_ picked: Date) {
+        let full = DateText.stored(picked, withTime: false)
+        value = value.count == 5 ? String(full.suffix(5)) : full
+    }
+}
+
+/// How near an expiry is, in words: "Ends in 12 days", "Ended 3 Oct".
+enum ExpiryText {
+    static func line(_ stored: String) -> (text: String, urgent: Bool)? {
+        guard !stored.isEmpty, let date = DateText.parse(stored) else { return nil }
+        let calendar = Calendar.current
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: Date()), to: calendar.startOfDay(for: date)).day ?? 0
+        if days < 0 { return ("Ended \(When.day(date)).", true) }
+        if days == 0 { return ("Ends today.", true) }
+        if days == 1 { return ("Ends tomorrow.", true) }
+        if days <= 60 { return ("Ends in \(days) days.", days <= 30) }
+        return ("Ends \(When.day(date)).", false)
+    }
+}
+
+/// A field that names a person or a thing in your HMN.
+struct RefField: View {
+    @Binding var value: String
+    var options: [Entity]
+    var noun: String
+
+    var body: some View {
+        Menu {
+            Button("None") { value = "" }
+            ForEach(options) { entity in
+                Button(entity.title) { value = entity.id }
+            }
+        } label: {
+            HStack {
+                Text(title).font(Theme.text).foregroundStyle(value.isEmpty ? Theme.stone : Theme.ink)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up.chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 48)
+            .background(Theme.card)
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.field, style: .continuous).stroke(Theme.hair, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.field, style: .continuous))
+        }
+        .accessibilityLabel("Choose \(noun)")
+        .accessibilityValue(title)
+    }
+
+    private var title: String {
+        if value.isEmpty { return "Choose \(noun)" }
+        return options.first { $0.id == value }?.title ?? "Not in your list"
+    }
 }

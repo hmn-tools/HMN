@@ -18,8 +18,11 @@ The position behind this is in [STRATEGY.md](STRATEGY.md). An agent that runs aw
 | `free_busy` | reads | The times in which the owner is busy between two dates, as start and end instants with no title. It is in the list only when the owner allows it for the key. |
 | `propose_create`, `propose_update`, `propose_delete`, `propose_link` | proposes | File a proposal. The owner decides. A proposal is at most 32,000 characters. When 100 proposals of the key wait, or the key filed 60 in the last hour, the answer is `429`: wait, and do not retry in a loop. |
 | `capture_inbox` | proposes | Put raw text in the owner's inbox. |
+| `describe_schema` | reads | The types, statuses, kinds, relations, and typed fields. Read it before you propose a row with properties: each typed value is checked on approval. |
+| `request_feature` | proposes | Tell the owner what you needed and did not have: a tool, a field, a type, a kind, or access. It grants nothing. Ask once. At most 10 new requests a day. |
+| `my_requests` | reads | Your requests, and what the owner did with them. |
 
-No tool writes the graph. Each tool has the MCP annotations `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`. A client that can filter tools can keep an agent to the tools that read: `search`, `get_entity`, `list_entities`, `list_links`, `neighbours`, `list_proposals`, `proposal_status`, and `free_busy` when the key has it.
+No tool writes the graph. Each tool has the MCP annotations `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`. A client that can filter tools can keep an agent to the tools that read: `search`, `get_entity`, `list_entities`, `list_links`, `neighbours`, `list_proposals`, `proposal_status`, `describe_schema`, `my_requests`, and `free_busy` when the key has it.
 
 Busy times need two switches, and both are off at the start. The owner switches on a calendar in Settings, Calendars, and switches on the key in Settings, Agent keys. The range of one call is at most 60 days.
 
