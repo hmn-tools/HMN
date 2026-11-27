@@ -160,7 +160,7 @@ The device key is stored in the Keychain (`org.hmn`, `kSecAttrAccessibleAfterFir
 
 A pasted key is a fallback for a credential the server has already issued. It is stored the same way. The owner key that can read Private from curl should stay on the mini. The phone's device key is the one that may request a vault grant.
 
-Opening the vault runs a biometric or device-passcode prompt (`LocalAuthentication`) and only then calls `POST /api/v1/vault/grants`. The grant is five minutes. The server cannot check that Face ID actually ran. The Keychain and the prompt are the control. That limit is stated in one line on the vault sheet: "This phone asks before it opens the vault. The mini cannot see Face ID."
+Opening the vault runs a biometric or device-passcode prompt (`LocalAuthentication`) and only then calls `POST /api/v1/vault/grants`. The grant is five minutes. The vault opens from a Sealed card in Review and from Settings > Privacy, which says "The vault is open until 14:05." and has **Close**. The phone closes it at that time, and when the app leaves the screen. The server cannot check that Face ID actually ran. The Keychain and the prompt are the control. That limit is stated in one line on the vault sheet: "This phone asks before it opens the vault. The mini cannot see Face ID."
 
 Below that, Connections lists Calendar, Health, and Sport as "Not installed". There is no switch. Copy under the list: "Plugins are not in this build. Nothing is fetched."
 
@@ -195,7 +195,16 @@ The pages of Today are today, upcoming, commitments, quiet, and week. A row of f
 
 **Not paired.** A card: "Hello." and "Pair this phone with your HMN to begin.", with the button **Pair this phone**. After a pairing, Settings closes and Today loads.
 
-**No answer.** When the phone is paired and your HMN does not answer, a card shows the figure of the mark on its side, with three letters "z". Title: "Your HMN is sleeping." If a snapshot was restored, the line is "This is your day as this phone saw it at 12:39." and the last day stays below, in a lighter tone, and its circles do nothing. If there is no snapshot: "This phone cannot reach it now. The pairing is still saved." The button is **Knock again**. The pairing on this phone is not cleared.
+**No answer.** When the phone is paired and your HMN does not answer, a card shows the figure of the mark on its side, with three letters "z". Title: "Your HMN is sleeping." If a snapshot was restored, the line is "This is your day as this phone saw it at 12:39." and the last day stays below, in a lighter tone, and its circles do nothing. If there is no snapshot: "This phone cannot reach it now. The pairing is still saved." The button is **Knock again**. The pairing on this phone is not cleared. The phone waits at most 8 seconds for an answer.
+
+**Other states.** Each has its own card above the last day, so the owner knows what to do:
+
+- "Your HMN had a fault." It answered with a fault of its own. **Try again**.
+- "This phone is not paired any more." The key was removed, or the server was set up again. **Pair again** opens Settings.
+- "Your HMN has a new certificate." The pin refused it. **Pair again** opens Settings.
+- "This phone is hidden. It shows Public only." A line, not a block: the day below is real, at Public.
+
+Today reads again when the app comes back to the front and when the day changes. A tick shows at once. If the server refuses it, the tick goes back and one line under the page says why, for a few seconds.
 
 Hide is in Settings, under Privacy. The phone drops to the public ceiling, clears the widget snapshot, and tells the server to force that device to Public. The app asks first, because the phone cannot undo it: **Show my things** is in the menu bar of the Mac that runs HMN. While the phone is hidden, Settings and Privacy say so in one line. Hide does not delete anything.
 
@@ -262,7 +271,7 @@ Decline marks it rejected. The graph does not change. This screen stays one prop
 
 Under the card, and also when nothing is waiting:
 
-- **Review all N from Triage.** One line for each source that has two or more waiting proposals. It opens Review: a list of that source's proposals, each with a tick. All rows start ticked. Headline: "Read the list. Then decide once." Two buttons carry the count: **Decline 4** and **Approve 4**. A row with no tick stays in the queue. A sealed proposal shows a lock, cannot be ticked, and is decided on the Agents screen after the vault opens. After the decision, one line: "4 approved."
+- **Review all N from Triage.** One line for each source that has two or more waiting proposals. It opens Review: a list of that source's proposals, each with a tick. All rows start ticked. Headline: "Read the list. Then decide once." Two buttons carry the count: **Decline 4** and **Approve 4**. A row with no tick stays in the queue. A sealed proposal shows a lock, cannot be ticked, and is decided on the Agents screen after the vault opens. After the decision, one line: "4 approved." When the list closes, Review keeps that line with **Undo all**, which takes back each approval of that list.
 - **Activity.** Decided proposals, newest first, as cards: the title, then the source, the outcome ("approved", "accepted by a rule", "declined", "expired", "undone"), the tier, and the time. **Undo** is on a card that can be undone. That includes an approved removal: undo brings the item back. **Let it be proposed again** is on a declined, expired, or undone card of a worker. A source that is a key shows the name that the owner gave it: "Agent key: research", or "Guest: Mara". The id of a key is not shown.
 - **Rules.** Headline: "Review is the default." One card for each worker, plugin, import, and outside agent, with the choices **Review**, **Auto**, and **Deny**. An outside agent and an import have no Auto. Below the cards: "Always waits for you. A delete. A change to a tier or an area. Sealed data. An outside agent. No rule changes these."
 
@@ -274,7 +283,7 @@ Settings has **Calendars**: each mirrored calendar with its event count, its tie
 
 Sealed state, vault closed. No card, no chips, no why. Headline: "Sealed". One button: **Open the vault**. Decline and Approve are not offered until the owner can read the proposal. The owner should not approve what the owner has not seen.
 
-Empty state, in place of the card and the buttons: "Nothing is waiting." The headline is omitted. The tab mark disappears. The teal mark is also absent when the only pending proposal is sealed and the vault is closed, because a mark on the tab would be a second signal and the line of copy is enough. When the vault is open and a sealed proposal is showing, the mark is present.
+Empty state, in place of the card and the buttons: "Nothing is waiting." The headline is omitted. The tab count disappears. The Review tab shows the number of proposals that the owner can read now, in a small teal mark. A Sealed proposal with the vault closed is not counted, because a mark on the tab would be a second signal and the line of copy is enough. When the vault is open, it counts.
 
 A proposal that fails to apply (the person was deleted, the payload breaks the fixture rule) stays pending and the screen shows the server's message under the buttons. The owner can decline it.
 

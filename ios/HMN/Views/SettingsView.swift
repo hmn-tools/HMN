@@ -182,6 +182,30 @@ struct PrivacyView: View {
     @EnvironmentObject private var session: Session
     @State private var hidden = false
     @State private var confirmHide = false
+    @State private var vaultMessage: String?
+
+    private static let clock: DateFormatter = {
+        let format = DateFormatter()
+        format.timeStyle = .short
+        format.dateStyle = .none
+        return format
+    }()
+
+    /// "The vault is open until 14:05." The phone closes it then, and when the app leaves the screen.
+    private var vaultLine: String {
+        guard session.grant != nil else { return "The vault is closed." }
+        guard let until = session.grantExpires else { return "The vault is open." }
+        return "The vault is open until \(Self.clock.string(from: until))."
+    }
+
+    private func openVault() async {
+        do {
+            try await session.openVault()
+            vaultMessage = nil
+        } catch {
+            vaultMessage = error.localizedDescription
+        }
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -196,10 +220,21 @@ struct PrivacyView: View {
                 .card(padding: 0)
                 HStack(spacing: 8) {
                     Image(systemName: session.grant == nil ? "lock" : "lock.open").foregroundStyle(Theme.tealDark)
-                    Text(session.grant == nil ? "The vault is closed." : "The vault is open for a few minutes.")
+                    Text(vaultLine)
                         .font(Theme.text).foregroundStyle(Theme.graphite)
+                    Spacer(minLength: 0)
+                    if session.grant == nil {
+                        Button("Open") { Task { await openVault() } }
+                            .buttonStyle(PillButtonStyle(kind: .secondary))
+                            .fixedSize()
+                    } else {
+                        Button("Close") { session.closeVault() }
+                            .buttonStyle(PillButtonStyle(kind: .secondary))
+                            .fixedSize()
+                    }
                 }
                 .padding(.top, 4)
+                if let vaultMessage { MessageLine(text: vaultMessage, isError: true) }
                 if hidden {
                     HiddenNote()
                 } else {

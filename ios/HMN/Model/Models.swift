@@ -201,6 +201,13 @@ struct BatchResult: Codable {
     var decided: Int
     var failed: Int
     var remaining: Int
+    var results: [BatchRow]?
+}
+
+struct BatchRow: Codable {
+    var id: String
+    var status: String
+    var error: String?
 }
 
 struct PolicyRule: Codable, Identifiable {
@@ -829,10 +836,25 @@ struct InboxItem: Codable, Identifiable {
     var deleted: Bool?
 }
 
-enum HMNError: Error, LocalizedError {
+/// What went wrong, in the words the owner reads. Each state of the connection has its own case, so a screen can
+/// show the right card: a phone that is not paired any more is not the same as a server that is asleep.
+enum HMNError: Error, LocalizedError, Equatable {
     case message(String)
+    /// The server does not know this phone's key any more.
+    case unpaired
+    /// No answer in time: the server is off, or the network is down.
+    case asleep
+    /// The server showed a certificate that this phone did not pair with.
+    case pin
+    /// The server answered with a fault of its own.
+    case fault
     var errorDescription: String? {
-        if case .message(let text) = self { return text }
-        return "The server did not answer."
+        switch self {
+        case .message(let text): return text
+        case .unpaired: return "This phone is not paired any more. Pair it again in Settings."
+        case .asleep: return "Your HMN did not answer. Try again in a moment."
+        case .pin: return "Your HMN showed a certificate that this phone does not know."
+        case .fault: return "Your HMN could not finish that. Try again."
+        }
     }
 }

@@ -1,4 +1,3 @@
-import LocalAuthentication
 import SwiftUI
 
 struct AgentsView: View {
@@ -14,6 +13,8 @@ struct AgentsView: View {
     @State private var loaded = false
     @State private var working = false
     @State private var decided: Decided?
+    /// The last decision on a list from Review all. Its approvals can be taken back together.
+    @State private var batch: BatchOutcome?
 
     /// The last decision on this screen.
     private struct Decided {
@@ -39,13 +40,10 @@ struct AgentsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         SmallLabel(text: "\(proposal.agentName) · Sealed")
                         Text("Sealed").font(Theme.heading)
-                        Text("It waits at the end of the queue until you open the vault.")
+                        Text("It waits at the end of the queue. Open the vault to read it, then decide.")
                             .font(Theme.text).foregroundStyle(Theme.graphite)
                         Button("Open the vault") { Task { await openVault() } }
                             .buttonStyle(PillButtonStyle())
-                        Button("Decline without reading") { Task { await decide(proposal, approve: false) } }
-                            .buttonStyle(TextButtonStyle())
-                            .disabled(working)
                     }
                     .card(padding: 20)
                 } else if let proposal = current {
@@ -63,6 +61,7 @@ struct AgentsView: View {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                 }
                 if let decided { decidedLine(decided) }
+                if let batch { batchLine(batch) }
                 if let message { MessageLine(text: message, isError: true) }
                 HStack {
                     if let proposal = current, !proposal.redacted {
@@ -78,7 +77,10 @@ struct AgentsView: View {
                     // The queue stays one proposal at a time. A long queue from one source can be read as a list.
                     ForEach(groups, id: \.source) { group in
                         NavigationLink("Review all \(group.count)") {
-                            BatchView(source: group.source, name: group.name)
+                            BatchView(source: group.source, name: group.name) { outcome in
+                                batch = outcome
+                                decided = nil
+                            }
                         }
                         .buttonStyle(TextButtonStyle())
                         .accessibilityLabel("Review all \(group.count) from \(group.name)")
@@ -218,13 +220,40 @@ struct AgentsView: View {
         .clipShape(Capsule())
     }
 
+    /// "4 approved." with Undo all, after a list from Review all.
+    private func batchLine(_ outcome: BatchOutcome) -> some View {
+        HStack(spacing: 12) {
+            Text(outcome.label).font(Theme.text).lineLimit(2)
+            Spacer(minLength: 0)
+            if outcome.approved && !outcome.ids.isEmpty {
+                Button(working ? "Undoing" : "Undo all") { Task { await undoAll(outcome) } }
+                    .font(Theme.sans(13, weight: .semibold))
+                    .foregroundStyle(Theme.tealDark)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 44)
+                    .background(Theme.card)
+                    .clipShape(Capsule())
+                    .disabled(working)
+            }
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, outcome.approved ? 4 : 18)
+        .frame(minHeight: 52)
+        .background(Theme.tealTint)
+        .clipShape(Capsule())
+    }
+
     private var editSheet: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     editField("Title", text: $title)
-                    editField("Due", text: $due, hint: "YYYY-MM-DD")
+                    VStack(alignment: .leading, spacing: 6) {
+                        SmallLabel(text: "Due")
+                        DateField(value: $due)
+                    }
                     editField("Reason", text: $reason)
+                    if let message { MessageLine(text: message, isError: true) }
                 }
                 .padding(22)
             }
@@ -252,6 +281,7 @@ struct AgentsView: View {
     private func reload() async {
         do {
             proposals = try await session.client().proposals().filter { $0.status == "pending" }
+            session.waiting = proposals.filter { !$0.redacted }.count
             message = nil
         } catch is URLError {
             message = "Your HMN did not answer."
@@ -273,21 +303,27 @@ struct AgentsView: View {
     }
 
     private func openVault() async {
-        let context = LAContext()
         do {
-            let ok: Bool = try await withCheckedThrowingContinuation { continuation in
-                context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Open the vault") { success, error in
-                    if let error { continuation.resume(throwing: error) }
-                    else { continuation.resume(returning: success) }
-                }
-            }
-            guard ok else { return }
-            let issued = try await session.client().mintGrant()
-            session.grant = issued.grant
+            try await session.openVault()
             await reload()
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    /// Take back each approval of the last list. One that cannot change says so.
+    private func undoAll(_ outcome: BatchOutcome) async {
+        guard !working else { return }
+        working = true
+        defer { working = false }
+        var failed = 0
+        for id in outcome.ids {
+            do { try await session.client().undo(id) } catch { failed += 1 }
+        }
+        batch = nil
+        message = failed == 0 ? nil : "\(failed) could not be taken back. Activity has each one."
+        await reload()
+        await session.refreshToday()
     }
 
     private func decide(_ proposal: Proposal, approve: Bool) async {

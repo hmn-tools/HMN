@@ -38,7 +38,9 @@ The server half is done on 2026-11-27: items 1, 2, 3, 7 (the single route was th
 8. **A task made on a person or project page takes the area and tier of that page.**
 9. **Links are checked.** A relation must be one HMN knows, between types that fit; a duplicate or a self link is refused.
 
-## Batch 3: flows and errors
+## Batch 3: flows and errors. Done on 2026-11-27.
+
+All nine items are in the app. The client keeps one connection with an 8 second timeout, and each failure has its own state (`HMNError` and `Session.reach`). Today has a card for each state and a search button. A tick is optimistic. Review has a count on its tab, Undo all after a list, and no unread decline. Privacy opens the vault. The record editor guards unsaved edits.
 
 1. **Search** from Today and from the inbox's File to, with the type of each result.
 2. **Honest states.** "Not paired any more", "Hidden", "Your HMN had a fault", and "Your HMN is sleeping" are different cards. Requests time out after 8 seconds. Each server answer has a plain message.

@@ -45,6 +45,11 @@ struct RecordView: View {
     @State private var unlinking: GraphLink?
     @State private var addingLink = false
     @State private var askTier: String?
+    /// True while the owner decides whether to drop the edits.
+    @State private var askLeave = false
+
+    /// Edits that are not saved. While there are some, Back becomes Cancel, and Cancel asks first.
+    private var dirty: Bool { loaded && !readOnly && draft != saved }
 
     /// The editable part of a record. Save sends only what changed.
     struct Draft: Equatable {
@@ -107,6 +112,22 @@ struct RecordView: View {
         .navigationTitle(Words.type(type))
         .navigationBarTitleDisplayMode(.inline)
         .background(Theme.ground.ignoresSafeArea())
+        .navigationBarBackButtonHidden(dirty)
+        .interactiveDismissDisabled(dirty)
+        .preference(key: UnsavedEditsKey.self, value: dirty)
+        .toolbar {
+            if dirty {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { askLeave = true } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { Task { await save() } }
+                        .disabled(working || draft.title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+        .confirmationDialog("Drop your changes?", isPresented: $askLeave, titleVisibility: .visible) {
+            Button("Drop the changes", role: .destructive) { dismiss() }
+            Button("Keep editing", role: .cancel) {}
+        }
         .task { await load() }
         .sheet(isPresented: $addingLink) {
             AddLinkSheet(fromType: type, fromId: id) { await load() }.themed()
@@ -765,4 +786,11 @@ struct NewRecordSheet: View {
             created(made)
         } catch { message = error.localizedDescription }
     }
+}
+
+/// True when a record editor below has edits that are not saved. A sheet hides its Close then, so the editor's
+/// Cancel, which asks first, is the one way out.
+struct UnsavedEditsKey: PreferenceKey {
+    static var defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
 }

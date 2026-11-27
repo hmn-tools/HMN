@@ -36,36 +36,55 @@ final class APIClient: NSObject, URLSessionDelegate {
     var fingerprint: String
     private var grant: String?
 
-    init(baseURL: URL, token: String, fingerprint: String) {
+    /// A kept client holds its connection open between requests. A passing client lets it go after its last request.
+    private let keepsWarm: Bool
+
+    init(baseURL: URL, token: String, fingerprint: String, keepsWarm: Bool = false) {
         self.baseURL = baseURL
         self.token = token
         self.fingerprint = fingerprint
+        self.keepsWarm = keepsWarm
     }
 
     func setGrant(_ value: String?) { grant = value }
 
-    // One session for each client. It is created on the first request. The last request that
-    // ends invalidates it and clears it, so the session no longer keeps this client and its grant alive.
+    /// Each request waits at most this long for the server to answer.
+    static let timeout: TimeInterval = 8
+
+    // One session for each client, made on the first request. A passing client ends it after its last request, so
+    // the session does not keep the client and its grant alive. A kept client ends it only in finish().
     private let lock = NSLock()
     private var cachedSession: URLSession?
     private var inFlight = 0
+    /// Set when the pin refused the server's certificate, so the failed request says why.
+    private var pinRefused = false
 
     private func beginRequest() -> URLSession {
         lock.lock(); defer { lock.unlock() }
         inFlight += 1
         if let cachedSession { return cachedSession }
-        let made = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = Self.timeout
+        configuration.waitsForConnectivity = false
+        let made = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
         cachedSession = made
         return made
     }
 
     private func endRequest() {
         lock.lock()
-        inFlight -= 1
-        let done = inFlight <= 0 ? cachedSession : nil
-        if done != nil { cachedSession = nil; inFlight = 0 }
+        inFlight = max(0, inFlight - 1)
+        let done = (!keepsWarm && inFlight == 0) ? cachedSession : nil
+        if done != nil { cachedSession = nil }
         lock.unlock()
         done?.finishTasksAndInvalidate()
+    }
+
+    private func takePinRefused() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        let value = pinRefused
+        pinRefused = false
+        return value
     }
 
     /// Ends the session of this client after its running requests finish. A later request makes a new session.
@@ -75,6 +94,35 @@ final class APIClient: NSObject, URLSessionDelegate {
         cachedSession = nil
         lock.unlock()
         old?.finishTasksAndInvalidate()
+    }
+
+    /// Sends one request and turns each failure into a state the owner can read.
+    private func perform(_ request: URLRequest) async throws -> Data {
+        let session = beginRequest()
+        defer { endRequest() }
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch let error as URLError {
+            if takePinRefused() { throw HMNError.pin }
+            switch error.code {
+            case .cancelled: throw CancellationError()
+            case .serverCertificateUntrusted, .serverCertificateHasBadDate, .serverCertificateNotYetValid, .serverCertificateHasUnknownRoot:
+                throw HMNError.pin
+            default: throw HMNError.asleep
+            }
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            let failure = try? JSONDecoder().decode(APIFailure.self, from: data)
+            // A 401 with a key means the key is gone. A 401 without one is a pairing code that did not work.
+            if status == 401, request.value(forHTTPHeaderField: "Authorization") != nil { throw HMNError.unpaired }
+            if status >= 500 { throw HMNError.fault }
+            if let failure { throw HMNError.message(failure.error.message) }
+            throw HMNError.message("Your HMN gave an answer that this phone cannot read.")
+        }
+        return data
     }
 
     func me() async throws -> Me { try await send("/api/v1/me", surface: "phone") }
@@ -405,16 +453,7 @@ final class APIClient: NSObject, URLSessionDelegate {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
-        let session = beginRequest()
-        defer { endRequest() }
-        let (data, response) = try await session.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        if !(200..<300).contains(status) {
-            if let failure = try? JSONDecoder().decode(APIFailure.self, from: data) {
-                throw HMNError.message(failure.error.message)
-            }
-            throw HMNError.message("The server did not answer.")
-        }
+        let data = try await perform(request)
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(T.self, from: data)
@@ -431,16 +470,7 @@ final class APIClient: NSObject, URLSessionDelegate {
         if let grant { request.setValue(grant, forHTTPHeaderField: "X-HMN-Grant") }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let session = beginRequest()
-        defer { endRequest() }
-        let (data, response) = try await session.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        if !(200..<300).contains(status) {
-            if let failure = try? JSONDecoder().decode(APIFailure.self, from: data) {
-                throw HMNError.message(failure.error.message)
-            }
-            throw HMNError.message("The server did not answer.")
-        }
+        let data = try await perform(request)
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(T.self, from: data)
@@ -459,6 +489,7 @@ final class APIClient: NSObject, URLSessionDelegate {
         let der = SecCertificateCopyData(leaf) as Data
         let digest = SHA256.hash(data: der).map { String(format: "%02x", $0) }.joined()
         guard !fingerprint.isEmpty, digest == fingerprint.lowercased() else {
+            lock.lock(); pinRefused = true; lock.unlock()
             return (.cancelAuthenticationChallenge, nil)
         }
         return (.useCredential, URLCredential(trust: trust))

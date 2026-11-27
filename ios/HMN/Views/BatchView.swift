@@ -6,6 +6,8 @@ struct BatchView: View {
     @Environment(\.dismiss) private var dismiss
     let source: String
     let name: String
+    /// Tells Review what this list decided, so that Review can offer Undo all after the list closes.
+    var onDone: (BatchOutcome) -> Void = { _ in }
     @State private var proposals: [Proposal] = []
     @State private var picked: Set<String> = []
     @State private var message: String?
@@ -123,6 +125,8 @@ struct BatchView: View {
             let result = try await session.client().decideBatch(approve: approve, source: source, ids: ids)
             let verb = approve ? "approved" : "declined"
             message = result.failed == 0 ? "\(result.decided) \(verb)." : "\(result.decided) \(verb). \(result.failed) did not change."
+            let done = (result.results ?? []).filter { $0.error == nil }.map(\.id)
+            onDone(BatchOutcome(ids: done, approved: approve, label: message ?? ""))
             await load(tickAll: false)
             await session.refreshToday()
             if proposals.isEmpty { dismiss() }
@@ -130,4 +134,11 @@ struct BatchView: View {
             message = error.localizedDescription
         }
     }
+}
+
+/// What one list decision did: the proposals it changed, and the line that says so.
+struct BatchOutcome {
+    var ids: [String]
+    var approved: Bool
+    var label: String
 }

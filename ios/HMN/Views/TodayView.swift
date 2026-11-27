@@ -4,7 +4,11 @@ struct TodayView: View {
     @EnvironmentObject private var session: Session
     @State private var screenId = "today"
     @State private var screen: TodayScreen?
-    @State private var asleep = false
+    /// A tick shows at once. The server's answer replaces it, or an error takes it back.
+    @State private var optimistic: [String: Bool] = [:]
+    /// A short line next to the tick that failed. It goes after a few seconds.
+    @State private var toast: String?
+    @State private var showSearch = false
     /// True while a knock waits for an answer. The time of the last knock that got none.
     @State private var knocking = false
     @State private var lastKnock: Date?
@@ -34,16 +38,16 @@ struct TodayView: View {
                     if !session.isPaired {
                         firstRun
                     } else {
-                        if asleep { sleeping }
+                        stateCard
+                        if session.hidden { hiddenCard }
                         if let screen {
                             content(screen)
-                        } else if !asleep && !loaded {
+                        } else if !offline && !loaded {
                             ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                         }
                     }
                     if session.auditAlarm { auditAlarmCard }
                     if let note { MessageLine(text: note) }
-                    if let banner = session.banner { MessageLine(text: banner, isError: true) }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -62,6 +66,15 @@ struct TodayView: View {
                     }
             )
             // The line stays above the pager, so that the owner sees it on a long day.
+            if let toast {
+                MessageLine(text: toast, isError: true)
+                    .padding(.horizontal, 20).padding(.top, 6)
+                    .transition(.opacity)
+                    .task(id: toast) {
+                        try? await Task.sleep(nanoseconds: 4_000_000_000)
+                        withAnimation { self.toast = nil }
+                    }
+            }
             if let completed { undoLine(completed).padding(.horizontal, 16).padding(.top, 6) }
             if session.isPaired && screen != nil && !session.isMember { pager }
         }
@@ -71,6 +84,9 @@ struct TodayView: View {
             await load()
         }
         .sheet(isPresented: $showYear) { YearReviewView().themed() }
+        .sheet(isPresented: $showSearch, onDismiss: { Task { await load() } }) { SearchView().themed() }
+        // Back at the front, or a new day: read the page again.
+        .onChange(of: session.refreshTick) { _, _ in Task { await load() } }
         .sheet(item: $opened, onDismiss: { Task { await load() } }) { item in OpenedItem(item: item).themed() }
         // The owner pairs the phone in Settings. Today reads again when that sheet closes.
         .onChange(of: session.showSettings) { _, open in
@@ -101,6 +117,17 @@ struct TodayView: View {
             Mark()
             SmallLabel(text: screen?.dateLabel ?? "HMN")
             Spacer()
+            if session.isPaired && !session.isMember {
+                Button { showSearch = true } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.body.weight(.medium))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.ink)
+                .accessibilityLabel("Search")
+            }
             Button { session.showSettings = true } label: {
                 Image(systemName: "slider.horizontal.3")
                     .font(.body.weight(.medium))
@@ -141,7 +168,7 @@ struct TodayView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
             .card(padding: 0)
-            .opacity(asleep ? 0.6 : 1)
+            .opacity(offline ? 0.6 : 1)
         }
         // The week page ends with the way to the year.
         if screenId == "week" && !session.isMember {
@@ -173,18 +200,29 @@ struct TodayView: View {
     }
 
     /// The owner opens a row that is an entity. A member's Home stays a glance.
+    /// True when the last request did not reach your HMN, or it refused this phone.
+    private var offline: Bool { session.reach != .ok }
+
     private func opens(_ item: ScreenItem) -> Bool {
-        item.type != nil && !session.isMember && !asleep
+        item.type != nil && !session.isMember && !offline
     }
 
-    private func row(_ item: ScreenItem, in section: ScreenSection) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+    /// The row as the owner sees it now: a tick that waits for the server shows at once.
+    private func shown(_ item: ScreenItem) -> ScreenItem {
+        var copy = item
+        if let done = optimistic[item.id] { copy.done = done }
+        return copy
+    }
+
+    private func row(_ raw: ScreenItem, in section: ScreenSection) -> some View {
+        let item = shown(raw)
+        return HStack(alignment: .center, spacing: 12) {
             if section.id == "routines" {
                 Button { Task { await checkIn(item) } } label: { glyph(item) }
                     .buttonStyle(.plain)
                     .frame(minWidth: 32, minHeight: 44)
                     .accessibilityLabel(item.done ? "Done: \(item.title). Tap to take it back." : "Check in: \(item.title)")
-            } else if item.glyph == "checkbox" && !item.done && taskSections.contains(section.id) && !asleep {
+            } else if item.glyph == "checkbox" && !item.done && taskSections.contains(section.id) && !offline {
                 Button { Task { await complete(item) } } label: { glyph(item) }
                     .buttonStyle(.plain)
                     .frame(minWidth: 32, minHeight: 44)
@@ -227,6 +265,55 @@ struct TodayView: View {
                 .buttonStyle(PillButtonStyle())
         }
         .card(padding: 20)
+    }
+
+    /// One card for each state of the connection. The last day that the phone saw stays below each one.
+    @ViewBuilder private var stateCard: some View {
+        switch session.reach {
+        case .ok: EmptyView()
+        case .asleep: sleeping
+        case .fault:
+            stateNote(
+                title: "Your HMN had a fault.",
+                text: screen == nil
+                    ? "It is awake, but it could not make this page."
+                    : "It is awake, but it could not make this page. This is your day as this phone saw it at \(screen?.updatedLabel ?? "").",
+                action: knocking ? "Trying" : "Try again"
+            ) { Task { await knock() } }
+        case .unpaired:
+            stateNote(
+                title: "This phone is not paired any more.",
+                text: "Your HMN does not know this phone's key. The key was removed, or your HMN was set up again.",
+                action: "Pair again"
+            ) { session.showSettings = true }
+        case .pin:
+            stateNote(
+                title: "Your HMN has a new certificate.",
+                text: "This phone trusts only the certificate that it paired with. Pair again to trust the new one.",
+                action: "Pair again"
+            ) { session.showSettings = true }
+        }
+    }
+
+    private func stateNote(title: String, text: String, action: String, perform: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(Theme.heading)
+            Text(text).font(Theme.text).foregroundStyle(Theme.graphite)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(action, action: perform).buttonStyle(PillButtonStyle())
+        }
+        .card(padding: 20)
+    }
+
+    /// The phone is hidden: it reads Public only. The owner ends Hide on the server.
+    private var hiddenCard: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "eye.slash").foregroundStyle(Theme.tealDark)
+            Text("This phone is hidden. It shows Public only. Hide ends on your HMN, from its menu bar.")
+                .font(Theme.text).foregroundStyle(Theme.graphite)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .card()
     }
 
     /// The phone is paired, and your HMN does not answer. The last day that the phone saw stays below, in grey.
@@ -280,7 +367,7 @@ struct TodayView: View {
         await load()
         let waited = Date().timeIntervalSince(started)
         if waited < 0.8 { try? await Task.sleep(nanoseconds: UInt64((0.8 - waited) * 1_000_000_000)) }
-        if asleep {
+        if offline {
             lastKnock = Date()
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
         } else {
@@ -318,8 +405,12 @@ struct TodayView: View {
     }
 
     private func show(_ id: String) {
+        guard id != screenId else { return }
         withAnimation(.easeOut(duration: 0.2)) { screenId = id }
         completed = nil
+        // The old page goes at once, so its rows never show under the new page's dot.
+        screen = nil
+        loaded = false
         Task { await load() }
     }
 
@@ -343,17 +434,25 @@ struct TodayView: View {
     }
 
     /// A tick on a routine, or a tick taken back when it was by mistake.
-    private func checkIn(_ item: ScreenItem) async {
+    private func checkIn(_ raw: ScreenItem) async {
+        let item = shown(raw)
+        guard optimistic[item.id] == nil else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        optimistic[item.id] = !item.done
         do {
             if item.done { _ = try await session.client().uncheck(item.id) } else { _ = try await session.client().checkIn(item.id) }
             await load()
         } catch {
-            session.banner = error.localizedDescription
+            withAnimation { toast = "\(item.title) did not change. \(error.localizedDescription)" }
+            session.noteReach(error)
         }
+        optimistic[item.id] = nil
     }
 
     private func complete(_ item: ScreenItem) async {
+        guard optimistic[item.id] == nil else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        optimistic[item.id] = true
         do {
             let answer = try await session.client().setDone(item.id, true)
             if answer.pending {
@@ -364,8 +463,10 @@ struct TodayView: View {
             }
             await load()
         } catch {
-            session.banner = error.localizedDescription
+            withAnimation { toast = "\(item.title) is not done yet. \(error.localizedDescription)" }
+            session.noteReach(error)
         }
+        optimistic[item.id] = nil
     }
 
     private func reopen(_ item: ScreenItem) async {
@@ -374,35 +475,41 @@ struct TodayView: View {
             completed = nil
             await load()
         } catch {
-            session.banner = error.localizedDescription
+            withAnimation { toast = "\(item.title) is still done. \(error.localizedDescription)" }
+            session.noteReach(error)
         }
     }
 
     private func load() async {
         guard session.isPaired else { return }
-        if screen == nil {
+        // Only Today has a saved copy. Another page shows nothing old while it loads.
+        if screen == nil, screenId == "today" {
             if let cached = session.today ?? SnapshotStore.loadPhone() ?? SnapshotStore.load() {
                 screen = cached
                 session.today = cached
             }
         }
+        let asked = screenId
         do {
-            screen = try await session.client().screen(screenId)
-            if screenId == "today", let phone = screen {
-                session.today = phone
-                SnapshotStore.savePhone(phone)
+            let answer = try await session.client().screen(asked)
+            // The owner turned the page while this one loaded: keep the new page.
+            guard asked == screenId else { return }
+            screen = answer
+            if asked == "today" {
+                session.today = answer
+                SnapshotStore.savePhone(answer)
             }
-            asleep = false
+            session.noteReach(nil)
             loaded = true
-            session.banner = nil
+        } catch is CancellationError {
+            return
         } catch {
-            // No answer, or the pin refused the certificate. The last day stays, and the pairing stays.
-            asleep = true
+            // The last day stays, and the pairing stays. The card above it says what happened.
+            session.noteReach(error)
             loaded = true
-            session.banner = nil
             return
         }
-        guard screenId == "today" else { return }
+        guard screenId == "today", session.sideWorkDue() else { return }
         // The copies for the widget and the lock screen, and the check of the audit log.
         // A fault here does not change what Today shows.
         do {
@@ -474,13 +581,18 @@ struct Mark: View {
 struct OpenedItem: View {
     @Environment(\.dismiss) private var dismiss
     let item: ScreenItem
+    /// An editor below has edits that are not saved. Its own Cancel takes the place of Close.
+    @State private var unsaved = false
 
     var body: some View {
         NavigationStack {
             Group {
                 ItemPage(type: item.type ?? "task", id: item.id, title: item.title)
             }
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+            .toolbar {
+                if !unsaved { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+            }
         }
+        .onPreferenceChange(UnsavedEditsKey.self) { unsaved = $0 }
     }
 }

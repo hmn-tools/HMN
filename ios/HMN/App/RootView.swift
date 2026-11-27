@@ -43,6 +43,11 @@ struct RootView: View {
         }
         .task { await session.refreshMember() }
         .task { await session.flushInbox() }
+        .task { await session.refreshWaiting() }
+        // A new day: each screen reads again, so yesterday's rows do not stay.
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged).receive(on: RunLoop.main)) { _ in
+            session.refreshTick += 1
+        }
         .overlay {
             // The app switcher takes its picture when the scene is not active. This cover is all it sees.
             if phase != .active {
@@ -53,7 +58,15 @@ struct RootView: View {
             }
         }
         .onChange(of: phase) { _, next in
-            if next == .active { Task { await session.flushInbox() } }
+            if next == .active {
+                // Back at the front: the open screen reads again, and so do the Review count and the hidden state.
+                session.refreshTick += 1
+                Task {
+                    await session.flushInbox()
+                    await session.refreshMember()
+                    await session.refreshWaiting()
+                }
+            }
             if next == .inactive || next == .background { session.persistConnection() }
             if next == .background { session.closeVault() }
         }
@@ -75,7 +88,7 @@ struct RootView: View {
             .padding(.horizontal, 4)
             .accessibilityLabel("Capture")
             tabButton(.projects, "Projects")
-            tabButton(.agents, "Review")
+            tabButton(.agents, "Review", count: session.waiting)
         }
         .padding(.horizontal, 8)
         .frame(height: 64)
@@ -86,19 +99,33 @@ struct RootView: View {
         .padding(.bottom, 4)
     }
 
-    private func tabButton(_ value: AppTab, _ title: String) -> some View {
+    private func tabButton(_ value: AppTab, _ title: String, count: Int = 0) -> some View {
         Button { tab = value } label: {
-            Text(title)
-                .font(Theme.sans(13, weight: .medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .foregroundStyle(tab == value ? Theme.ink : Theme.stone)
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .background(tab == value ? Theme.ground : Color.clear)
-                .clipShape(Capsule())
-                .contentShape(Rectangle())
+            HStack(spacing: 4) {
+                Text(title)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if count > 0 {
+                    // A small count when something waits. It is the one mark on the bar that is not a tab.
+                    Text(count > 99 ? "99+" : "\(count)")
+                        .font(Theme.sans(10, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.paper)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(Theme.tealDark)
+                        .clipShape(Capsule())
+                }
+            }
+            .font(Theme.sans(13, weight: .medium))
+            .foregroundStyle(tab == value ? Theme.ink : Theme.stone)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(tab == value ? Theme.ground : Color.clear)
+            .clipShape(Capsule())
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(count > 0 ? "\(title), \(count) waiting" : title)
         .accessibilityAddTraits(tab == value ? [.isSelected] : [])
     }
 }

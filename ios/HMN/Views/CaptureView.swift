@@ -9,6 +9,8 @@ struct CaptureView: View {
     @State private var suggestions: [String] = []
     @State private var message: String?
     @State private var saved: String?
+    /// True while a save runs, so that a second tap does not save the text twice.
+    @State private var saving = false
     @State private var deleting: InboxItem?
     @FocusState private var typing: Bool
     @State private var openId: String?
@@ -40,9 +42,9 @@ struct CaptureView: View {
                         tierButton("Personal", "personal")
                         tierButton("Private", "private")
                     }
-                    Button("Save") { Task { await save() } }
+                    Button(saving ? "Saving" : "Save") { Task { await save() } }
                         .buttonStyle(PillButtonStyle())
-                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(saving || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     if let saved { MessageLine(text: saved) }
                     if let message { MessageLine(text: message, isError: true) }
                     SmallLabel(text: items.isEmpty ? "Inbox · empty" : "Inbox · \(items.count)")
@@ -166,7 +168,9 @@ struct CaptureView: View {
 
     private func save() async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, !saving else { return }
+        saving = true
+        defer { saving = false }
         do {
             _ = try await session.client().captureInbox(text: trimmed, source: "app", tier: tier, attachments: [])
             text = ""
@@ -174,6 +178,14 @@ struct CaptureView: View {
             message = nil
             saved = "Saved to the inbox."
             await reload()
+        } catch let error as HMNError where error == .asleep || error == .fault {
+            // Your HMN did not take it now. The phone keeps it, and sends it when your HMN answers.
+            InboxQueue.enqueue(text: trimmed, source: "app", privateNote: false, tier: tier, attachments: [])
+            text = ""
+            tier = "personal"
+            message = nil
+            saved = "Kept on this phone. It goes to the inbox when your HMN answers."
+            session.noteReach(error)
         } catch {
             message = error.localizedDescription
         }
