@@ -58,19 +58,12 @@ export function todayHtml(screen: TodayScreen, phoneChrome: boolean): string {
       ${sections}
       ${screen.closing ? `<p class="sum">${esc(screen.closing)}</p>` : ""}
     </div>
-    <footer><span>${esc(screen.label)}${screen.in_deck ? ` · screen ${screen.index} of ${screen.count}` : ""}</span><span>${esc(screen.updated_label)} → next ${esc(screen.next_label)}</span></footer>
+    <footer><span>${esc(screen.label)}${screen.in_deck ? ` · screen ${screen.index} of ${screen.count}` : ""}</span><span>${esc(screen.updated_label)}${screen.next_label ? ` → next ${esc(screen.next_label)}` : ""}</span></footer>
   </article>`;
   const chrome = phoneChrome
     ? `<header class="top"><span class="brand">${mark}<em>HMN</em></span><span class="mono">${esc(screen.date_label)}</span></header>
       ${card}
-      <div class="dots">${dots}</div>
-      <nav>
-        <div class="tab on"><span>Today</span></div>
-        <div class="tab"><span>People</span></div>
-        <div class="tab"><div class="plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div></div>
-        <div class="tab"><span>Projects</span></div>
-        <div class="tab"><span>Review</span></div>
-      </nav>`
+      <div class="dots">${dots}</div>`
     : `<header class="top"><span class="brand">${mark}<em>HMN</em></span><span class="mono">${esc(screen.date_label)}</span></header>${card}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HMN</title>
 <style>
@@ -78,12 +71,12 @@ export function todayHtml(screen: TodayScreen, phoneChrome: boolean): string {
 @font-face{font-family:"IBM Plex Mono";src:url("data:font/ttf;base64,${font64("IBMPlexMono-Medium.ttf")}") format("truetype");font-weight:500}
 @font-face{font-family:"IBM Plex Mono";src:url("data:font/ttf;base64,${font64("IBMPlexMono-SemiBold.ttf")}") format("truetype");font-weight:600}
 ${GARDEN_CSS}
-body{width:390px;min-height:${phoneChrome ? "844px" : "480px"};padding:0;font-family:${SANS}}
+body{width:100%;max-width:390px;margin:0 auto;min-height:${phoneChrome ? "700px" : "480px"};padding:0 0 16px;font-family:${SANS}}
 .top{display:flex;justify-content:space-between;align-items:center;padding:18px 20px 0}
 .brand{display:flex;gap:8px;align-items:center;color:var(--ink)}.brand em{font-style:normal;font-family:${MONO};font-weight:500;letter-spacing:.08em;font-size:11px}
 .mono{font-family:${MONO};font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--stone)}
-.screen{margin:12px 16px 0;background:var(--card);border-radius:18px;box-shadow:0 4px 18px rgba(0,0,0,.06);min-height:${phoneChrome ? "640px" : "420px"};display:flex;flex-direction:column;position:relative}
-.body{padding:22px 20px 52px}h1{font-size:30px;margin:0}
+.screen{margin:12px 16px 0;background:var(--card);border-radius:18px;box-shadow:0 4px 18px rgba(0,0,0,.06);min-height:${phoneChrome ? "560px" : "420px"};display:flex;flex-direction:column}
+.body{padding:22px 20px 16px;flex:1}h1{font-size:30px;margin:0}
 .band{margin:12px 0 2px}
 .sum{font-size:14px;line-height:1.5;color:var(--graphite);margin:10px 0 0}
 .lbl{display:flex;justify-content:space-between;margin:18px 0 4px;font-family:${MONO};font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--stone)}
@@ -94,15 +87,10 @@ body{width:390px;min-height:${phoneChrome ? "844px" : "480px"};padding:0;font-fa
 .mark{width:32px;height:32px;border-radius:10px;background:var(--ground);flex:none;font-family:${MONO};font-size:13px;line-height:32px;text-align:center}
 .ico{width:22px;height:22px;flex:none;stroke:var(--ink);fill:none;stroke-width:1.6}
 .ico.teal{stroke:var(--teal-dark)}
-.t{font-size:16px;font-weight:500;line-height:1.3}.s{font-size:13px;color:var(--stone);margin-top:2px}
+.t{overflow-wrap:anywhere;font-size:16px;font-weight:500;line-height:1.3}.s{font-size:13px;color:var(--stone);margin-top:2px}
 .badge{font-family:${MONO};font-size:10px;font-weight:500;letter-spacing:.06em;border:1px solid var(--ink);padding:2px 7px;border-radius:999px;vertical-align:2px}
-footer{position:absolute;left:20px;right:20px;bottom:16px;display:flex;justify-content:space-between;font-family:${MONO};font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--stone)}
+footer{padding:0 20px 16px;display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:space-between;font-family:${MONO};font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--stone)}
 .dots{display:flex;justify-content:center;gap:8px;margin-top:14px}.dots i{width:7px;height:7px;border-radius:999px;background:var(--hair);display:block}.dots i.on{width:18px;background:var(--ink)}
-nav{display:flex;justify-content:space-around;align-items:center;margin:14px 16px 16px;height:64px;padding:0 8px;background:var(--card);border-radius:999px;box-shadow:0 10px 28px rgba(0,0,0,.12)}
-.tab{flex:1;text-align:center;color:var(--stone);font-size:13px;font-weight:500}
-.tab.on span{display:inline-block;background:var(--ground);color:var(--ink);border-radius:999px;padding:12px 16px}
-.plus{width:52px;height:52px;border-radius:50%;background:var(--ink);display:flex;align-items:center;justify-content:center;margin:0 auto}
-.plus svg{stroke:var(--paper);width:22px;height:22px;stroke-width:2;fill:none}
 </style></head><body>${chrome}</body></html>`;
 }
 

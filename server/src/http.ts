@@ -1,4 +1,5 @@
 import { fontFile, todayHtml } from "./html";
+import { gardenPage, words } from "./garden";
 import type { Hmn } from "./hmn";
 import { handleMcp } from "./mcp";
 import { todayPng } from "./png";
@@ -20,6 +21,22 @@ const SECURITY: Record<string, string> = {
     "content-security-policy":
     "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; base-uri 'none'; form-action 'none'",
 };
+
+const BROWSE_TITLES: Record<string, string> = {
+  person: "People",
+  place: "Places",
+  asset: "Things",
+  goal: "Goals",
+  note: "Notes",
+  project: "Projects",
+  task: "Tasks",
+  event: "Events",
+  area: "Areas",
+};
+
+function browseSubtitle(entity: { kind?: string | null; status?: string | null; tier?: string | null }): string {
+  return [entity.kind, entity.status, entity.tier].filter((part): part is string => Boolean(part)).map(words).join(" · ");
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -106,7 +123,7 @@ async function route(hmn: Hmn, req: Request, ip: string | null, fingerprint: str
   }
   if (req.method === "GET" && pathname === "/") {
     return text(
-      `<!doctype html><html><head><meta charset="utf-8"><title>HMN</title></head><body style="font-family:ui-monospace,monospace;background:#F4F4F2;color:#0D0D0D;padding:48px"><h1>HMN</h1><p>This server does not list your data.</p></body></html>`,
+      gardenPage("HMN", `<h1>HMN</h1><div class="card"><p>This is a private server. It does not list your things.</p><p class="s">Open the HMN app on your phone to see your day.</p></div>`),
       "text/html; charset=utf-8",
     );
   }
@@ -229,13 +246,19 @@ async function route(hmn: Hmn, req: Request, ip: string | null, fingerprint: str
   if (req.method === "GET" && browse) {
     const listed = hmn.browse(access, browse[1] as never);
     if (browse[2]) {
+      const title = BROWSE_TITLES[listed.type] ?? `${words(listed.type)}s`;
+      const count = listed.entities.length;
       const screen = {
         ...hmn.screen(access, "today"),
         id: browse[1]!,
-        label: browse[1]!,
-        greeting: listed.entities.length ? listed.type : "Nothing here yet.",
-        summary: `${listed.entities.length} in view.`,
-        sections: listed.entities.length ? [{ id: listed.type, label: listed.type, items: listed.items }] : [],
+        label: title,
+        greeting: count ? title : "Nothing here yet.",
+        summary: count ? `${count} in view.` : "Nothing to show at this ceiling.",
+        next_label: "",
+        // The stored words of a row (its tier, status, and kind) are shown as words.
+        sections: count
+          ? [{ id: listed.type, label: title, items: listed.items.map((item, index) => ({ ...item, subtitle: browseSubtitle(listed.entities[index]!) })) }]
+          : [],
         in_deck: false,
         closing: null,
       };

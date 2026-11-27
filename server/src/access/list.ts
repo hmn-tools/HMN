@@ -1,4 +1,4 @@
-import { gardenPage } from "../garden";
+import { gardenPage, whenWords, words } from "../garden";
 import type { Hmn } from "../hmn";
 import { listJournals } from "../journal";
 import { childTierOf, projectEntity, type AreaInfo } from "../policy";
@@ -81,12 +81,28 @@ export function accessConnections(hmn: Hmn, access: Access) {
   return { connections };
 }
 
+const KIND_WORDS: Record<string, string> = {
+  guest: "Guest",
+  mcp: "Agent",
+  device: "Phone",
+  view: "Read-only key",
+  trmnl: "Fridge display",
+  plugin: "Plugin",
+};
+
+const SCOPE_WORDS: Record<string, string> = { read: "reads", write: "reads and writes", propose: "proposes changes" };
+
 export function accessHtml(connections: ReturnType<typeof accessConnections>["connections"]): string {
   const rows = connections
     .map((item) => {
-      const reads = item.reads.map((read) => `${read.at} ${read.type} ${read.title ?? ""}`.trim()).join("; ") || "No reads at this ceiling.";
-      const button = item.revocable ? `<form method="post" action="/api/v1/access/${esc(item.id)}/revoke"><button type="submit" class="danger">Revoke</button></form>` : "";
-      return `<article class="card"><h2>${esc(item.name)}</h2><p class="s">${esc(item.kind)} · cap ${esc(item.tier_cap)} · ${esc(item.scopes.join(", "))} · last <span class="data">${esc(item.last_access ?? "never")}</span></p><p class="note">${esc(reads)}</p>${button}</article>`;
+      const reads = item.reads.length
+        ? item.reads.map((read) => `<p class="note">${esc(whenWords(read.at))} · ${esc(words(read.type))}${read.title ? ` · ${esc(read.title)}` : ""}</p>`).join("")
+        : `<p class="note">No reads at this ceiling.</p>`;
+      const state = item.revoked ? "Revoked" : item.revocable ? "" : "Cannot be revoked here";
+      const scopes = item.scopes.map((scope) => SCOPE_WORDS[scope] ?? words(scope)).join(", ");
+      // The page's Content-Security-Policy blocks forms, and a browser sends no key. The owner revokes in the app.
+      const revoke = item.revocable ? `<p class="note">Revoke it in the HMN app, in Settings under Connected.</p>` : "";
+      return `<article class="card"><h2>${esc(item.name)}</h2><p class="s">${esc(KIND_WORDS[item.kind] ?? words(item.kind))} · up to ${esc(words(item.tier_cap))} · ${esc(scopes)}${state ? ` · ${esc(state)}` : ""}</p><p class="s">Last used ${esc(whenWords(item.last_access))}</p>${reads}${revoke}</article>`;
     })
     .join("");
   const empty = connections.length ? "" : `<p class="lead">Nothing is connected yet.</p>`;

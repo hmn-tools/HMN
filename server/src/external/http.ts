@@ -202,6 +202,7 @@ function consentPage(source: URL | URLSearchParams, client: string | null, error
 ${notice}<form method="post" action="/oauth/authorize" onsubmit="this.querySelector('button').disabled=true">${fields}
 <label>Setup code from the mini <input name="setup_code" autocomplete="off"></label>
 <button type="submit">Allow</button></form>
+<p class="s">Did you not start this? Close this page. Nothing is allowed until you press Allow.</p>
 </div>`,
   );
 }

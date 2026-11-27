@@ -32,6 +32,8 @@ p{margin:6px 0}
 .row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--rule)}
 .row:first-of-type{border-top:0}
 .t{font-size:16px;font-weight:500}
+.row > div,.t,.s,.note,h2,dd,.lead{min-width:0;overflow-wrap:anywhere}
+:focus-visible{outline:2px solid var(--teal-dark);outline-offset:2px}
 .band{display:flex;width:84px;height:5px;border-radius:3px;overflow:hidden;margin:12px 0 4px}
 .band i{flex:1;display:block}.band i:nth-child(1){background:var(--lilac)}.band i:nth-child(2){background:var(--coral)}.band i:nth-child(3){background:var(--sand)}
 button,.button{font:500 15px ${SANS};min-height:44px;padding:0 20px;border-radius:999px;border:0;background:var(--ink);color:var(--paper);cursor:pointer}
@@ -43,6 +45,37 @@ label{display:flex;flex-direction:column;gap:6px;margin:12px 0;font-size:14px;co
 a{color:var(--ink)}
 .error{color:var(--danger)}
 `;
+
+/** A stored id as words: an underscore becomes a space, and the first letter is a capital. */
+export function words(raw: string): string {
+  const spaced = raw.replace(/[_-]+/g, " ").trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** A stored time as "13 Nov, 14:05 UTC". A page has no zone of its own, so it says which zone it uses. */
+export function whenWords(iso: string | null | undefined, empty = "Never", now = new Date()): string {
+  if (!iso) return empty;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return empty;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const year = date.getUTCFullYear() === now.getUTCFullYear() ? "" : ` ${date.getUTCFullYear()}`;
+  return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}${year}, ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} UTC`;
+}
+
+/** A worker schedule in a sentence: "daily:07:00" is "Every day at 07:00". */
+export function scheduleWords(schedule: string): string {
+  if (schedule === "hourly") return "Every hour";
+  const daily = /^daily:(\d{2}:\d{2})$/.exec(schedule);
+  if (daily) return `Every day at ${daily[1]}`;
+  const weekly = /^weekly:([0-6]):(\d{2}:\d{2})$/.exec(schedule);
+  if (weekly) return `Every ${DAYS[Number(weekly[1])]} at ${weekly[2]}`;
+  const monthly = /^monthly:(\d{1,2}):(\d{2}:\d{2})$/.exec(schedule);
+  if (monthly) return `On day ${Number(monthly[1])} of each month at ${monthly[2]}`;
+  return schedule;
+}
 
 /** A whole page: the head, the Garden style, and the body inside one column. */
 export function gardenPage(title: string, body: string, extraCss = "", head = ""): string {

@@ -1,4 +1,4 @@
-import { gardenPage, MONO } from "../garden";
+import { gardenPage, MONO, scheduleWords, whenWords, words } from "../garden";
 import type { JournalEntry } from "../journal";
 import type { viewWorker } from "./config";
 
@@ -11,7 +11,7 @@ function journalBlock(entries: JournalEntry[]): string {
       const read = entry.read.map((item) => item.title).join(", ") || "nothing new";
       const proposed = entry.proposed.map((item) => item.title).join(", ") || "no proposal";
       const hidden = entry.hidden ? " Some of this entry is above this ceiling." : "";
-      return `<p class="note">${esc(entry.at)} · ${esc(entry.model)} · read ${esc(read)} · proposed ${esc(proposed)}. ${esc(entry.why)}${esc(hidden)}</p>`;
+      return `<p class="note">${esc(whenWords(entry.at))} · ${esc(entry.model)} · read ${esc(read)} · proposed ${esc(proposed)}. ${esc(entry.why)}${esc(hidden)}</p>`;
     })
     .join("");
   return `<h3>Journal</h3>${lines}`;
@@ -30,17 +30,17 @@ function esc(value: string): string {
 export function workersHtml(workers: WorkerView[], journals: Record<string, JournalEntry[]> = {}): string {
   const rows = workers
     .map((worker) => {
-      const model = worker.llm_mode === "local" ? `local · ${worker.llm_model}` : worker.llm_mode === "cloud" ? `cloud · ${worker.cloud_endpoint ?? ""}` : "fallback";
-      const last = worker.last_run_at ?? "Not yet";
+      const model = worker.llm_mode === "local" ? `On this Mac · ${worker.llm_model}` : worker.llm_mode === "cloud" ? `Cloud · ${worker.cloud_endpoint ?? ""}` : "Fallback rules, no model";
+      const last = whenWords(worker.last_run_at, "Not yet");
       const state = worker.enabled ? "Running" : "Paused";
       const next = worker.enabled ? "false" : "true";
       const label = worker.enabled ? "Pause" : "Resume";
       return `<article class="card">
         <h2>${esc(worker.name)}</h2>
         <dl>
-          <div><dt>Tier</dt><dd>${esc(worker.tier)} · ceiling ${esc(worker.effective_ceiling)}</dd></div>
+          <div><dt>Tier</dt><dd>${esc(words(worker.tier))} · ceiling ${esc(words(worker.effective_ceiling))}</dd></div>
           <div><dt>Model</dt><dd>${esc(model)}</dd></div>
-          <div><dt>Schedule</dt><dd>${esc(worker.schedule)}</dd></div>
+          <div><dt>Schedule</dt><dd>${esc(scheduleWords(worker.schedule))}</dd></div>
           <div><dt>Last run</dt><dd>${esc(last)}</dd></div>
           <div><dt>State</dt><dd>${state}</dd></div>
         </dl>

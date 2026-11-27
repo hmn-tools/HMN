@@ -209,9 +209,9 @@ test("the settings screen shows tier, model, schedule, and last run, and pause s
   expect(page.status).toBe(200);
   expect(page.headers.get("content-type")).toContain("text/html");
   expect(page.text).toContain("People");
-  expect(page.text).toContain("ceiling private");
-  expect(page.text).toContain("fallback");
-  expect(page.text).toContain("monthly:1:08:00");
+  expect(page.text).toContain("ceiling Private");
+  expect(page.text).toContain("Fallback rules");
+  expect(page.text).toContain("On day 1 of each month at 08:00");
   expect(page.text).toContain("Pause");
   expect(page.text).toContain("Family stays Private");
   const denied = await call(app, "/api/v1/workers.html", { key: app.secrets!.display });
