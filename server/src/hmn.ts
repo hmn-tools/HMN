@@ -57,6 +57,8 @@ import {
   browseItems,
   DECK,
   nextDeckIndex,
+  renewalsIn,
+  RENEWAL_PAST_DAYS,
   type SourcedLink,
   type TodayScreen,
 } from "./screens";
@@ -2426,6 +2428,14 @@ export class Hmn {
       if (view) this.noteRead(access, view);
     }
     return screen;
+  }
+
+  /** The "Expiring soon" rows for an agent: from the recent past to `days` ahead. The ceiling already cut the rows. */
+  expiring(access: Access, days: number) {
+    const input = this.screenInput(access);
+    const list = renewalsIn(input, RENEWAL_PAST_DAYS, days);
+    for (const renewal of list) this.noteRead(access, renewal.entity);
+    return list.map((renewal) => ({ entity: renewal.entity, label: renewal.label, key: renewal.key, days: renewal.days }));
   }
 
   /** One screen of the fridge. The views are those of the display's own key, through the policy layer. */

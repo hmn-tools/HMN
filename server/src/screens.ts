@@ -374,20 +374,20 @@ export type ScreenInput = {
 };
 
 /** Today shows an expiry from this many days ago to this many days ahead. */
-const RENEWAL_PAST_DAYS = 30;
+export const RENEWAL_PAST_DAYS = 30;
 const RENEWAL_AHEAD_DAYS = 30;
 /** Upcoming looks further ahead, and never back. */
 const UPCOMING_RENEWAL_DAYS = 60;
 /** The weekly review looks one week ahead. */
 const WEEK_RENEWAL_DAYS = 7;
 
-type Renewal = { entity: EntityView; label: string; key: string; days: number };
+export type Renewal = { entity: EntityView; label: string; key: string; days: number };
 
 /**
  * Each expiry value of the rows in `views` that falls from `back` days ago to `ahead` days ahead, in the owner's
  * zone, soonest first. A row with two expiry fields gives two. A value that HMN cannot read is skipped.
  */
-function renewalsIn(input: ScreenInput, back: number, ahead: number): Renewal[] {
+export function renewalsIn(input: ScreenInput, back: number, ahead: number): Renewal[] {
   const fieldsOf = input.expiryFields;
   if (!fieldsOf) return [];
   const today = zoned(input.now, input.timeZone).dateKey;
@@ -405,7 +405,7 @@ function renewalsIn(input: ScreenInput, back: number, ahead: number): Renewal[] 
   return out.sort((a, b) => a.key.localeCompare(b.key) || a.entity.title.localeCompare(b.entity.title) || a.label.localeCompare(b.label));
 }
 
-function endsPhrase(days: number): string {
+export function endsPhrase(days: number): string {
   if (days === 0) return "ends today";
   if (days === 1) return "ends tomorrow";
   if (days > 1) return `ends in ${days} days`;

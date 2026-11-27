@@ -166,7 +166,7 @@ test("the tool list has read-only labels, and the instructions are short", async
   try {
     expect(INSTRUCTIONS.length).toBeLessThan(2000);
     expect(INSTRUCTIONS).toContain("idempotency_key");
-    expect(READ_ONLY_TOOLS.sort()).toEqual(["describe_schema", "free_busy", "get_entity", "list_entities", "list_links", "list_proposals", "my_requests", "neighbours", "proposal_status", "search"]);
+    expect(READ_ONLY_TOOLS.sort()).toEqual(["describe_schema", "expiring", "free_busy", "get_entity", "list_entities", "list_links", "list_proposals", "my_requests", "neighbours", "person_page", "proposal_status", "search", "today", "upcoming", "week"]);
     for (const item of TOOLS) {
       expect(item.annotations.destructiveHint).toBe(false);
       expect(item.annotations.openWorldHint).toBe(false);

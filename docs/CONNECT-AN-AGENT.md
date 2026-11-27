@@ -9,6 +9,9 @@ The position behind this is in [STRATEGY.md](STRATEGY.md). An agent that runs aw
 | Tool | Reads or proposes | Use |
 | --- | --- | --- |
 | `search` | reads | Find entities by words, best match first. A question in plain words works. |
+| `today`, `upcoming`, `week` | reads | What is on, as the owner's phone shows it, cut to the ceiling of your key. Start here. Each item has an `id` and a `type`: read it with `get_entity`. |
+| `person_page` | reads | One person: next dates, open tasks, notes, and linked things. |
+| `expiring` | reads | What ends soon, such as a passport or an insurance policy. `days` is 1 to 90, default 60. |
 | `get_entity` | reads | One entity. |
 | `list_entities` | reads | Every entity of one type. |
 | `list_links` | reads | The links of one entity. |
@@ -22,7 +25,7 @@ The position behind this is in [STRATEGY.md](STRATEGY.md). An agent that runs aw
 | `request_feature` | proposes | Tell the owner what you needed and did not have: a tool, a field, a type, a kind, or access. It grants nothing. Ask once. At most 10 new requests a day. |
 | `my_requests` | reads | Your requests, and what the owner did with them. |
 
-No tool writes the graph. Each tool has the MCP annotations `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`. A client that can filter tools can keep an agent to the tools that read: `search`, `get_entity`, `list_entities`, `list_links`, `neighbours`, `list_proposals`, `proposal_status`, `describe_schema`, `my_requests`, and `free_busy` when the key has it.
+No tool writes the graph. Each tool has the MCP annotations `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`. A client that can filter tools can keep an agent to the tools that read: `today`, `upcoming`, `week`, `person_page`, `expiring`, `search`, `get_entity`, `list_entities`, `list_links`, `neighbours`, `list_proposals`, `proposal_status`, `describe_schema`, `my_requests`, and `free_busy` when the key has it.
 
 Busy times need two switches, and both are off at the start. The owner switches on a calendar in Settings, Calendars, and switches on the key in Settings, Agent keys. The range of one call is at most 60 days.
 

@@ -600,6 +600,9 @@ Tools:
 | Tool | Effect |
 | --- | --- |
 | `search` | Ranked search, scoped. One matching word is sufficient, so a question in plain words works. |
+| `today`, `upcoming`, `week` | The same screens that the owner's phone gets, built by the same code for this key, as `{title, summary, sections: [{id, label, items: [{id, type, title, subtitle}]}]}`. A task item also has `done`. Each item is a row in the read log. |
+| `person_page` | The person page for one person in scope: the next dates, the open tasks, the notes, and the linked things. A person out of scope answers as a missing row does. |
+| `expiring` | The "Expiring soon" list: expiry fields from 30 days ago to `days` ahead (1 to 90, default 60), soonest first. |
 | `get_entity` | One entity, if in scope. |
 | `list_entities` | One type, if in scope. |
 | `list_links` | Links for one entity, scoped. |
