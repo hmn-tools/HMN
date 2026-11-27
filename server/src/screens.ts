@@ -80,12 +80,13 @@ function capital(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-export function summaryLine(due: number, family: number, quiet: number, surface: Surface, calendar = 0, overdue = 0): string {
+export function summaryLine(due: number, family: number, quiet: number, surface: Surface, calendar = 0, overdue = 0, ending = 0): string {
   if (surface === "display" && due + overdue === 0) return "Nothing public is due.";
-  if (due + family + quiet + calendar + overdue === 0) return "The day is clear.";
+  if (due + family + quiet + calendar + overdue + ending === 0) return "The day is clear.";
   const parts: string[] = [];
   if (overdue) parts.push(countPhrase(overdue, "thing overdue", "things overdue"));
   if (due || !overdue) parts.push(due ? countPhrase(due, "thing due", "things due") : "nothing due");
+  if (ending) parts.push(countPhrase(ending, "thing ending soon", "things ending soon"));
   if (calendar) parts.push(countPhrase(calendar, "event on the calendar", "events on the calendar"));
   if (family) parts.push(countPhrase(family, "family date", "family dates"));
   if (quiet) parts.push(countPhrase(quiet, "thing that has gone quiet", "things that have gone quiet"));
@@ -186,7 +187,8 @@ function assemble(
     });
   }
   // Something that is about to end needs a decision, as a late task does. It comes before the family dates.
-  const renewals = renewalSection(renewalsIn(input, RENEWAL_PAST_DAYS, RENEWAL_AHEAD_DAYS), TODAY_ROWS_MAX);
+  const renewalList = renewalsIn(input, RENEWAL_PAST_DAYS, RENEWAL_AHEAD_DAYS);
+  const renewals = renewalSection(renewalList, TODAY_ROWS_MAX);
   if (renewals) sections.push(renewals);
   if (family.length) {
     sections.push({
@@ -313,7 +315,7 @@ function assemble(
     date_label: `${zone.weekday.toUpperCase()} ${Number(zone.day)}/${zone.month}/${zone.year}`,
     clock_label: zone.hm,
     greeting,
-    summary: summaryLine(due.length, family.length, quiet.length, surface, calendar.length, overdue.length),
+    summary: summaryLine(due.length, family.length, quiet.length, surface, calendar.length, overdue.length, renewalList.length),
     updated_label: zone.hm,
     next_label: plusHour(zone.hm),
     refresh_seconds: 3600,

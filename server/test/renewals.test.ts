@@ -161,3 +161,9 @@ test("a bad stored value does not break the screen", async () => {
     app.close();
   }
 });
+
+test("a day with only an expiry is not called clear", async () => {
+  const { summaryLine } = await import("../src/screens");
+  expect(summaryLine(0, 0, 0, "phone", 0, 0, 1)).toBe("Nothing due, and one thing ending soon.");
+  expect(summaryLine(0, 0, 0, "phone", 0, 0, 0)).toBe("The day is clear.");
+});
