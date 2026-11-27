@@ -20,6 +20,8 @@ enum FontRegistry {
 /// Garden, the design system of docs/UX.md: white cards on a calm stone ground, one sans face, ink for the main
 /// action. Each colour has a light and a dark value, and the Mac chooses from its own appearance.
 enum Theme {
+    /// The one side inset of the panel.
+    static let inset: CGFloat = 16
     static let ground = adaptive(0xEAEAE7, 0x121211)
     static let card = adaptive(0xFFFFFF, 0x1E1E1C)
     static let ink = adaptive(0x0D0D0D, 0xEDEDEA)

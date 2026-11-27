@@ -218,4 +218,30 @@ final class MenuLogicTests: XCTestCase {
         XCTAssertTrue(model.ownerKeyPresent)
         XCTAssertEqual(model.health, "answering")
     }
+
+    func testWordsHideStoredValues() {
+        XCTAssertEqual(MenuWords.tier("personal"), "Personal")
+        XCTAssertEqual(MenuWords.tier(nil), "")
+        XCTAssertEqual(MenuWords.action("panic_clear"), "Shown again")
+        XCTAssertEqual(MenuWords.action("kind_fields"), "Kind fields")
+        XCTAssertEqual(MenuWords.surface("lock"), "Lock screen")
+        XCTAssertEqual(MenuWords.surface(nil), "")
+        XCTAssertEqual(MenuWords.route("morning_brief"), "Morning brief")
+        XCTAssertEqual(MenuWords.when("not a date"), "")
+        let when = MenuWords.when("2020-01-02T03:04:00.000Z")
+        XCTAssertFalse(when.contains("T"))
+        XCTAssertFalse(when.contains("2020-"))
+    }
+
+    @MainActor
+    func testServerStateNamesEachCase() async {
+        let config = MenuConfig(baseURL: "https://127.0.0.1:8787", fingerprint: "abc", label: "l", domain: "gui", plist: "/tmp/p", uid: "501")
+        let stopped = MenuModel(config: config, transportFactory: { _ in nil }, keyLoader: { "hmn_shortkey" }, statusChecker: { _ in false })
+        await stopped.refresh()
+        XCTAssertEqual(stopped.serverState, .stopped)
+        let silent = MenuModel(config: config, transportFactory: { _ in { _ in throw AdminFailure.unreachable } }, keyLoader: { "hmn_shortkey" }, statusChecker: { _ in true })
+        await silent.refresh()
+        XCTAssertEqual(silent.serverState, .unreachable)
+        XCTAssertFalse(silent.panelsReady)
+    }
 }

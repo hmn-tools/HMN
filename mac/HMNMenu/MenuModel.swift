@@ -17,13 +17,16 @@ final class MenuModel: ObservableObject {
     @Published var pairingCode = ""
     @Published var pairingPayload = ""
     @Published var notice = ""
+    @Published var noticeArea: NoticeArea = .general
+    @Published var starting = false
+    @Published var fault = false
     @Published var busy = false
     @Published var ownerKeyPresent = false
     @Published var modelRoutes: [String] = []
     @Published var modelRam = "no extra RAM"
     @Published var voice = VoiceNote.line
     @Published var localModels: [ManagedModel] = []
-    @Published var spendLine = "This month · no cloud egress."
+    @Published var spendLine = "This month: nothing is sent to the cloud."
     @Published var spendNotice = false
     @Published var externalOn = false
     @Published var externalPort = "8788"
@@ -51,12 +54,37 @@ final class MenuModel: ObservableObject {
         self.statusChecker = statusChecker ?? { spec in await ServiceControl.run(.status, spec: spec) }
     }
 
+    var serverState: ServerState {
+        if starting { return .starting }
+        if launchd != "loaded" { return .stopped }
+        if health != "answering" { return .unreachable }
+        return fault ? .fault : .running
+    }
+
+    /// The data cards show only when the server answers and the owner key is there.
+    var panelsReady: Bool { serverState == .running && ownerKeyPresent }
+
+    private func clearLists() {
+        devices = []
+        backups = []
+        audit = []
+        hiddenCount = 0
+        pairedCount = 0
+        chainOK = nil
+        chain = "Not checked"
+        pairingCode = ""
+        pairingPayload = ""
+    }
+
     func refresh() async {
         notice = ""
+        noticeArea = .server
+        fault = false
         config = configLoader()
         launchd = await statusChecker(config.service) ? "loaded" : "not loaded"
         guard !config.fingerprint.isEmpty else {
             health = "No certificate pin yet."
+            clearLists()
             return
         }
         let key: String?
@@ -72,6 +100,7 @@ final class MenuModel: ObservableObject {
         ownerKeyPresent = !(key ?? "").isEmpty
         guard let send = transportFactory(config.fingerprint) else {
             health = "The server did not answer."
+            clearLists()
             return
         }
         let next = AdminClient(baseURL: config.baseURL, key: key, fingerprint: config.fingerprint, send: send)
@@ -82,9 +111,11 @@ final class MenuModel: ObservableObject {
             version = live.version
         } catch {
             health = "The server did not answer."
+            clearLists()
             return
         }
         guard ownerKeyPresent else {
+            noticeArea = .owner
             notice = "The owner key is not in the Keychain."
             return
         }
@@ -98,11 +129,15 @@ final class MenuModel: ObservableObject {
             audit = try await next.audit().entries
             let verified = try await next.verify()
             chainOK = verified.ok
-            chain = verified.ok ? "The chain verifies." : "The chain does not verify."
+            chain = verified.ok ? "The activity record checks out." : "The activity record does not check out. Something changed it."
             if let board = try? await next.modelBoard() {
                 voice = board.voice
                 modelRam = board.ramLabel
-                modelRoutes = board.routes.keys.sorted().map { "\($0) · \(board.routes[$0] ?? "")" }
+                modelRoutes = board.routes.keys.sorted().map { key in
+                    let id = board.routes[key] ?? ""
+                    let name = board.models.first { $0.id == id }?.name ?? String(id.split(separator: ":", maxSplits: 1).last ?? "")
+                    return "\(MenuWords.route(key)): \(name)"
+                }
                 localModels = board.models.filter { $0.runtime == "ollama" }
                 if let spend = board.spend {
                     spendNotice = spend.notice != nil
@@ -114,12 +149,14 @@ final class MenuModel: ObservableObject {
                 externalPort = gate.port
             }
         } catch let error as AdminFailure {
-            chainOK = nil
-            chain = "Not checked"
+            clearLists()
+            fault = true
+            noticeArea = .server
             notice = Self.notice(for: error)
         } catch {
-            chainOK = nil
-            chain = "Not checked"
+            clearLists()
+            fault = true
+            noticeArea = .server
             notice = "The server refused."
         }
     }
@@ -130,12 +167,12 @@ final class MenuModel: ObservableObject {
 
     func setExternal(_ on: Bool) async {
         guard let client else { return }
-        await run { _ = try await client.setExternal(on) }
+        await run(.outside) { _ = try await client.setExternal(on) }
     }
 
     func hide() async {
         guard let client else { return }
-        await run {
+        await run(.hide) {
             if self.hiddenCount > 0 {
                 _ = try await client.clearPanic()
             } else {
@@ -146,7 +183,7 @@ final class MenuModel: ObservableObject {
 
     func pair() async {
         guard let client else { return }
-        await run {
+        await run(.pair) {
             let code = try await client.pair()
             self.pairingCode = code.code
             self.pairingPayload = code.payload
@@ -155,27 +192,27 @@ final class MenuModel: ObservableObject {
 
     func revoke(_ id: String) async {
         guard let client else { return }
-        await run { try await client.revoke(id: id) }
+        await run(.phones) { try await client.revoke(id: id) }
     }
 
     func backup() async {
         guard let client else { return }
-        await run { try await client.backup() }
+        await run(.backups) { try await client.backup() }
     }
 
     func restore(_ name: String) async {
         guard let client else { return }
-        await run { try await client.restore(name: name) }
+        await run(.backups) { try await client.restore(name: name) }
     }
 
     func pullModel(_ id: String) async {
         guard let client else { return }
-        await run { try await client.pullModel(id) }
+        await run(.models) { try await client.pullModel(id) }
     }
 
     func removeModel(_ id: String) async {
         guard let client else { return }
-        await run { try await client.removeModel(id) }
+        await run(.models) { try await client.removeModel(id) }
     }
 
     func saveOwnerKey(_ secret: String) -> Bool {
@@ -191,7 +228,11 @@ final class MenuModel: ObservableObject {
 
     private func service(_ action: ServiceAction) async {
         busy = true
-        defer { busy = false }
+        starting = action == .start || action == .restart
+        defer {
+            busy = false
+            starting = false
+        }
         if action == .start {
             let loaded = await ServiceControl.run(.status, spec: config.service)
             _ = await ServiceControl.run(loaded ? .restart : .start, spec: config.service)
@@ -200,17 +241,28 @@ final class MenuModel: ObservableObject {
         }
         try? await Task.sleep(nanoseconds: 400_000_000)
         await refresh()
+        // A server takes a few seconds to answer after a start. Look again before the panel says it is not answering.
+        if action != .stop {
+            var tries = 0
+            while health != "answering" && launchd == "loaded" && tries < 6 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                await refresh()
+                tries += 1
+            }
+        }
     }
 
-    private func run(_ work: () async throws -> Void) async {
+    private func run(_ area: NoticeArea, _ work: () async throws -> Void) async {
         busy = true
         defer { busy = false }
         do {
             try await work()
             await refresh()
         } catch let error as AdminFailure {
+            noticeArea = area
             notice = Self.notice(for: error)
         } catch {
+            noticeArea = area
             notice = "The server refused."
         }
     }
