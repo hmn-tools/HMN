@@ -201,6 +201,9 @@ export function asObject(value: unknown): Record<string, unknown> {
   return out;
 }
 
+/** The word in an allow list of areas that lets a key read the rows with no area. */
+export const NO_AREA = "none";
+
 export function areaDenied(entity: { id: string; type: string; area_id: string | null }, access: Access, areas?: Map<string, AreaInfo>): boolean {
   const deny = access.principal.denyAreas;
   // An entry is the id of an area, or `role:<name>` for each area whose kind has that role.
@@ -211,8 +214,12 @@ export function areaDenied(entity: { id: string; type: string; area_id: string |
   };
   if (entity.type === "area" && denied(entity.id)) return true;
   if (entity.area_id && denied(entity.area_id)) return true;
-  if (access.principal.allowAreas && entity.area_id && !access.principal.allowAreas.includes(entity.area_id)) {
-    return true;
+  // An allow list means what it says. An area row counts as its own area. A row with no area is open only when
+  // the list holds the word "none".
+  const allow = access.principal.allowAreas;
+  if (allow) {
+    const home = entity.type === "area" ? entity.id : entity.area_id;
+    if (home ? !allow.includes(home) : !allow.includes(NO_AREA)) return true;
   }
   if (access.principal.allowTypes && !access.principal.allowTypes.includes(entity.type)) return true;
   return false;

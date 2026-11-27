@@ -392,6 +392,8 @@ struct AgentKey: Codable, Identifiable {
     var allowAreas: [String]?
     /// Only these types, or nil for every type.
     var allowTypes: [String]?
+    /// What the owner made the key for. For the owner only: the agent never receives it.
+    var purpose: String?
     var lastUsedAt: String?
     var state: String
     var keychainItem: String?
@@ -446,6 +448,7 @@ struct AgentScope: Codable {
     var byType: [TypeCount]
     var byArea: [AreaCount]
     var closed: [String]
+    var purpose: String?
     struct TypeCount: Codable, Identifiable {
         var type: String
         var count: Int

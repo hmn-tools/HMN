@@ -11,6 +11,8 @@ struct KeysView: View {
     @State private var message: String?
     @State private var name = ""
     @State private var isView = false
+    @State private var job = JobDraft.fresh
+    @State private var areaChoices: [AreaChoice] = []
     @State private var working = false
     @State private var loaded = false
     @State private var revoking: AgentKey?
@@ -37,6 +39,11 @@ struct KeysView: View {
                     TextField(hint: isView ? "kitchen" : "research", text: $name)
                         .textFieldStyle(FieldStyle())
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    if !isView {
+                        Text("Choose the areas this agent needs. It reads nothing else.")
+                            .font(Theme.text).foregroundStyle(Theme.graphite)
+                        JobChoices(draft: $job, areas: areaChoices, strict: true)
+                    }
                     Button("Make the key") { Task { await create() } }
                         .buttonStyle(PillButtonStyle())
                         .disabled(name.isEmpty || working)
@@ -84,6 +91,9 @@ struct KeysView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(shown(key)).font(Theme.row).foregroundStyle(Theme.ink)
                             Text(line(key)).font(Theme.small).foregroundStyle(Theme.stone)
+                            if let purpose = key.purpose, !purpose.isEmpty {
+                                Text(purpose).font(Theme.small).foregroundStyle(Theme.graphite).lineLimit(2)
+                            }
                         }
                         Spacer()
                         Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
@@ -143,6 +153,9 @@ struct KeysView: View {
     private func load() async {
         do {
             let list = try await session.client().agentKeys()
+            if let areas = try? await session.client().entities("area") {
+                areaChoices = AgentPageView.choices(areas, deny: ["role:health", "role:money"])
+            }
             keys = list.keys
             maxDays = list.privateDaysMax
             loaded = true
@@ -155,10 +168,11 @@ struct KeysView: View {
         working = true
         defer { working = false }
         do {
-            let made = try await session.client().createAgentKey(name: name.trimmingCharacters(in: .whitespaces).lowercased(), view: isView)
+            let made = try await session.client().createAgentKey(name: name.trimmingCharacters(in: .whitespaces).lowercased(), view: isView, job: job.fields)
             message = made.keychainItem.map { "Made. Saved as \($0)." } ?? "Made."
             name = ""
             isView = false
+            job = JobDraft.fresh
             await load()
         } catch {
             message = error.localizedDescription

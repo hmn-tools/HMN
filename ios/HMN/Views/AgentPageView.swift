@@ -8,6 +8,9 @@ import SwiftUI
 struct AgentPageView: View {
     @EnvironmentObject private var session: Session
     let key: AgentKey
+    /// The key as the server has it now. It changes when the owner saves the job.
+    @State private var current: AgentKey?
+    @State private var areaChoices: [AreaChoice] = []
     @State private var scope: AgentScope?
     @State private var timeline: AgentTimeline?
     @State private var message: String?
@@ -20,6 +23,7 @@ struct AgentPageView: View {
                 if let message { MessageLine(text: message, isError: true) }
                 if scope == nil && message == nil { LoadingState() }
                 if let scope {
+                    if shown.scope != "read" { JobCard(key: shown, areas: areaChoices, onSaved: saved) }
                     seeing(scope)
                     seeAs
                 }
@@ -36,6 +40,14 @@ struct AgentPageView: View {
         .sheet(isPresented: $showToday) { AgentTodaySheet(key: key, name: name) }
     }
 
+    /// The key now: the one the page got, or the one that the last save returned.
+    private var shown: AgentKey { current ?? key }
+
+    private func saved(_ changed: AgentKey) async {
+        current = changed
+        await load()
+    }
+
     private var name: String {
         key.name.hasPrefix("external:") ? String(key.name.dropFirst("external:".count)) : key.name
     }
@@ -45,7 +57,10 @@ struct AgentPageView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(name).font(Theme.heading)
-            Text("Sees up to \(Words.id(key.ceiling))").font(Theme.row)
+            Text("Sees up to \(Words.id(shown.ceiling))").font(Theme.row)
+            if let purpose = shown.purpose, !purpose.isEmpty {
+                Text(purpose).font(Theme.text).foregroundStyle(Theme.graphite)
+            }
             ForEach(limits, id: \.self) { line in
                 Text(line).font(Theme.text).foregroundStyle(Theme.graphite)
             }
@@ -54,30 +69,38 @@ struct AgentPageView: View {
         .card()
     }
 
-    /// The limits of the key, in words.
+    /// The limits of the key, in words. The areas and the types are set in the Job card.
     private var limits: [String] {
         var lines: [String] = []
-        if let areas = key.allowAreas {
-            let titles = areas.compactMap { id in scope?.byArea.first { $0.areaId == id }?.title }
+        if let areas = shown.allowAreas {
+            let titles = areas.compactMap { id -> String? in
+                if id == "none" { return "items with no area" }
+                return areaChoices.first { $0.id == id }?.title ?? scope?.byArea.first { $0.areaId == id }?.title
+            }
             lines.append(titles.isEmpty ? "Only \(ReviewText.counted(areas.count, "area"))." : "Only these areas: \(ReviewText.list(titles)).")
         }
-        let closed = key.denyAreas.map { item -> String in
-            if item.hasPrefix("role:") { return Words.id(String(item.dropFirst(5))) }
-            return scope?.byArea.first { $0.areaId == item }?.title ?? "a closed area"
+        // The default closed areas are Health and Money. They are shown in words only when the list is not the default.
+        if Set(shown.denyAreas) != Self.defaultDeny {
+            let closed = shown.denyAreas.map { item -> String in
+                if item.hasPrefix("role:") { return Words.id(String(item.dropFirst(5))) }
+                return areaChoices.first { $0.id == item }?.title ?? scope?.byArea.first { $0.areaId == item }?.title ?? "a closed area"
+            }
+            lines.append(closed.isEmpty ? "No area is closed to it by name." : "Closed: \(ReviewText.list(closed)).")
         }
-        if !closed.isEmpty { lines.append("Closed: \(ReviewText.list(closed)).") }
-        if let types = key.allowTypes {
-            lines.append("Only these types: \(ReviewText.list(types.map { Words.type($0).lowercased() })).")
+        if let types = shown.allowTypes {
+            lines.append("Only these types: \(ReviewText.list(types.map { JobDraft.typeLabel($0).lowercased() })).")
         } else {
             lines.append("Every type.")
         }
-        if key.scope == "read" { lines.append("It reads and cannot propose.") }
+        if shown.scope == "read" { lines.append("It reads and cannot propose.") }
         return lines
     }
 
+    private static let defaultDeny: Set<String> = ["role:health", "role:money"]
+
     private var ends: String {
-        if key.state != "active" { return Words.id(key.state) }
-        guard let expires = key.expiresAt else { return "It does not end." }
+        if shown.state != "active" { return Words.id(shown.state) }
+        guard let expires = shown.expiresAt else { return "It does not end." }
         return "Ends \(When.day(expires))"
     }
 
@@ -197,12 +220,23 @@ struct AgentPageView: View {
         .card(padding: 0)
     }
 
+    /// The owner's areas, in the order of the server. An area that the key's deny list closes is not offered: the list wins over the allow list.
+    static func choices(_ areas: [Entity], deny: [String]) -> [AreaChoice] {
+        areas.filter { area in
+            if deny.contains(area.id) { return false }
+            if let kind = area.kind, deny.contains("role:\(kind)") { return false }
+            return true
+        }.map { AreaChoice(id: $0.id, title: $0.title) }
+    }
+
     private func load() async {
         do {
             async let scopeAnswer = session.client().agentScope(key.id)
             async let timelineAnswer = session.client().agentTimeline(key.id)
+            async let areaAnswer = session.client().entities("area")
             scope = try await scopeAnswer
             timeline = try await timelineAnswer
+            areaChoices = Self.choices(try await areaAnswer, deny: shown.denyAreas)
             message = nil
         } catch {
             message = error.localizedDescription

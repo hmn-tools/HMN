@@ -8,6 +8,7 @@ import { MODEL_TASKS } from "./models/policy";
 import {
   agentTierFloor,
   areaDenied,
+  NO_AREA,
   asObject,
   assertCanSeeTier,
   assertNoSpoilers,
@@ -1567,6 +1568,7 @@ export class Hmn {
     if (to <= from) throw new ApiError(422, "bad_range", "The end is after the start.");
     if (to - from > FREE_BUSY_DAYS_MAX * 86_400_000) throw new ApiError(422, "bad_range", `The range is at most ${FREE_BUSY_DAYS_MAX} days.`);
 
+    const areas = this.areaMap();
     const calendars = (this.store.db.query("SELECT id FROM entities WHERE deleted_at IS NULL AND type = 'source' AND kind = 'calendar'").all() as Array<{ id: string }>)
       .filter((row) => this.calendarSettings(row.id)?.freeBusy)
       .map((row) => row.id);
@@ -1578,6 +1580,8 @@ export class Hmn {
       for (const row of rows) {
         const properties = asObject(JSON.parse(row.properties || "{}"));
         if (properties.mirror !== true || properties.busy !== true) continue;
+        // A key that the owner limited to some areas or types gets the busy times of the events that it could read.
+        if (areaDenied(row, access, areas)) continue;
         if (!row.due_at || typeof properties.end_at !== "string") continue;
         const allDay = row.due_at.length === 10;
         const start = allDay ? Date.parse(startOfDay(row.due_at, this.timeZone)) : Date.parse(row.due_at);
@@ -1627,6 +1631,8 @@ export class Hmn {
       deny_areas: principal.denyAreas,
       allow_areas: principal.allowAreas,
       allow_types: principal.allowTypes,
+      // The job of the key, for the owner. It is not in any answer that an agent gets.
+      purpose: row.purpose ?? null,
       last_used_at: row.last_used_at ?? null,
       state: row.revoked_at ? "revoked" : ended ? "ended" : "active",
       source: `key:${row.id}`,
@@ -1650,6 +1656,16 @@ export class Hmn {
     return row;
   }
 
+  /** The purpose of a key from a request: plain text, at most 200 characters. An empty text is no purpose. Absent keeps `before`. */
+  private keyPurpose(body: Record<string, unknown>, before: string | null): string | null {
+    if (!("purpose" in body)) return before;
+    if (body.purpose === null) return null;
+    if (typeof body.purpose !== "string") throw new ApiError(422, "bad_purpose", "The purpose is text.");
+    const text = body.purpose.replace(/\s+/g, " ").trim();
+    if (text.length > PURPOSE_MAX) throw new ApiError(422, "bad_purpose", `The purpose is at most ${PURPOSE_MAX} characters.`);
+    return text || null;
+  }
+
   /** The limits of a key, from a request. A list that is absent keeps the value that the caller gives as `before`. */
   private keyLimits(body: Record<string, unknown>, before: { deny: string[]; areas: string[] | null; types: string[] | null }) {
     const list = (value: unknown, what: string): string[] => {
@@ -1666,7 +1682,7 @@ export class Hmn {
     let areas = before.areas;
     if ("allow_areas" in body) {
       areas = body.allow_areas === null ? null : list(body.allow_areas, "allow_areas");
-      if (areas && !areas.every((item) => areaIds.has(item))) throw new ApiError(422, "bad_area", "Unknown area.");
+      if (areas && !areas.every((item) => areaIds.has(item) || item === NO_AREA)) throw new ApiError(422, "bad_area", "Unknown area.");
     }
     let types = before.types;
     if ("allow_types" in body) {
@@ -1701,6 +1717,7 @@ export class Hmn {
     const ceiling = body.ceiling === undefined ? fallback : body.ceiling === "public" || body.ceiling === "household" || body.ceiling === "personal" ? body.ceiling : null;
     if (!ceiling) throw new ApiError(422, "bad_tier", "A new key is Public, Household, or Personal. Private is a grant that you give after this, with an end date.");
     const limits = this.keyLimits(body, { deny: ["role:health", "role:money"], areas: null, types: null });
+    const purpose = this.keyPurpose(body, null);
     const local = isLoopback(ip);
     const secret = randomSecret();
     const stored = scope === "read" ? rememberViewKey(name, secret) : rememberAgentKey(name, secret);
@@ -1714,10 +1731,10 @@ export class Hmn {
       .query(
         `INSERT INTO credentials (
           id, name, kind, key_hash, scope, max_tier, vault, allow_types, allow_areas, deny_areas,
-          forced_ceiling, expires_at, created_at, revoked_at, rotated_from, created_by
-        ) VALUES (?, ?, 'key', ?, ?, ?, 0, ?, ?, ?, NULL, ?, ?, NULL, NULL, ?)`,
+          forced_ceiling, expires_at, created_at, revoked_at, rotated_from, created_by, purpose
+        ) VALUES (?, ?, 'key', ?, ?, ?, 0, ?, ?, ?, NULL, ?, ?, NULL, NULL, ?, ?)`,
       )
-      .run(id, name, sha256hex(secret), scope, ceiling, limits.types ? JSON.stringify(limits.types) : null, limits.areas ? JSON.stringify(limits.areas) : null, JSON.stringify(limits.deny), expires, now.toISOString(), access.principal.id);
+      .run(id, name, sha256hex(secret), scope, ceiling, limits.types ? JSON.stringify(limits.types) : null, limits.areas ? JSON.stringify(limits.areas) : null, JSON.stringify(limits.deny), expires, now.toISOString(), access.principal.id, purpose);
     this.appendAudit({ actor: access.principal.id, action: "key_create", tier: ceiling, entity_type: "credential", entity_id: id, surface: access.surface });
     this.store.persist();
     return {
@@ -1747,9 +1764,10 @@ export class Hmn {
       if (typeof body.free_busy !== "boolean") throw new ApiError(422, "bad_value", "free_busy is true or false.");
       freeBusy = body.free_busy;
     }
+    const purpose = this.keyPurpose(body, row.purpose ?? null);
     this.store.db
-      .query("UPDATE credentials SET allow_types = ?, allow_areas = ?, deny_areas = ?, expires_at = ?, free_busy = ? WHERE id = ?")
-      .run(limits.types ? JSON.stringify(limits.types) : null, limits.areas ? JSON.stringify(limits.areas) : null, JSON.stringify(limits.deny), expires, freeBusy ? 1 : 0, id);
+      .query("UPDATE credentials SET allow_types = ?, allow_areas = ?, deny_areas = ?, expires_at = ?, free_busy = ?, purpose = ? WHERE id = ?")
+      .run(limits.types ? JSON.stringify(limits.types) : null, limits.areas ? JSON.stringify(limits.areas) : null, JSON.stringify(limits.deny), expires, freeBusy ? 1 : 0, purpose, id);
     this.appendAudit({ actor: access.principal.id, action: "key_change", tier: null, entity_type: "credential", entity_id: id, surface: access.surface });
     this.store.persist();
     return this.keyView(this.agentKey(id), this.now().toISOString());
@@ -1851,7 +1869,7 @@ export class Hmn {
   /** What one key can see now, as counts. The access is built from the credential row, so the secret is not used. */
   agentScope(access: Access, id: string) {
     const { row, keyAccess, ctx } = this.agentPage(access, id);
-    return agentScope(ctx, access, keyAccess, row.id, row.name);
+    return { ...agentScope(ctx, access, keyAccess, row.id, row.name), purpose: row.purpose ?? null };
   }
 
   /** The Today screen as one key would get it from the MCP surface. It is not logged as a read by that key. */
@@ -3954,12 +3972,18 @@ export class Hmn {
   private assertKeyTargets(access: Access, payload: Record<string, unknown>) {
     const areas = this.areaMap();
     const ids = collectIds(payload);
+    // An area that a row is filed in is checked against the area list only. A key for tasks need not read the area row.
+    const filed = new Set<string>();
     for (const part of [asObject(payload.entity), asObject(payload.patch)]) {
-      if (typeof part.area_id === "string") ids.push(part.area_id);
+      if (typeof part.area_id === "string") {
+        ids.push(part.area_id);
+        filed.add(part.area_id);
+      }
     }
     for (const id of ids) {
       const row = this.raw(id);
-      const readable = Boolean(row && !row.deleted_at && covers(rowCeiling(access, row, areas), ownTier(row, areas).tier) && !areaDenied(row, access, areas));
+      const who = filed.has(id) && !collectIds(payload).includes(id) ? withoutTypeList(access) : access;
+      const readable = Boolean(row && !row.deleted_at && covers(rowCeiling(who, row, areas), ownTier(row, areas).tier) && !areaDenied(row, who, areas));
       if (!readable) throw new ApiError(404, "not_found", "Not found.");
     }
   }
@@ -3972,6 +3996,20 @@ export class Hmn {
       // The link to a source belongs to the mirror and the plugins. With it, a row could pass as a copy of a calendar,
       // and the owner's own edits would answer "this comes from a calendar". `external_id` stays: agents use it.
       if ("source_id" in part) throw new ApiError(422, "field", "A proposal cannot set source_id.");
+    }
+    // A key that has an allow list files proposals only inside it: the type and the area of a new row, and a new area of a row.
+    const made = asObject(payload.entity);
+    if (op === "create" && typeof made.type === "string") {
+      const areaId = typeof made.area_id === "string" ? made.area_id : null;
+      if (areaDenied({ id: "", type: made.type, area_id: areaId }, access, areas)) {
+        throw new ApiError(403, "outside_scope", "This key does not have a job for that type or that area.");
+      }
+    }
+    if (op === "update" && "area_id" in patch && patch.area_id === null) {
+      const area = asObject(this.raw(typeof payload.id === "string" ? payload.id : "") ?? {});
+      if (typeof area.type === "string" && areaDenied({ id: String(area.id ?? ""), type: area.type, area_id: null }, access, areas)) {
+        throw new ApiError(403, "outside_scope", "This key does not have a job for rows with no area.");
+      }
     }
     // A key cannot name the address that the mini reads a calendar from.
     const entity = asObject(payload.entity);
@@ -3986,7 +4024,7 @@ export class Hmn {
     if ("tier" in patch && patch.tier !== null && !isTier(patch.tier)) throw new ApiError(422, "bad_tier", "Unknown tier.");
     if (typeof patch.area_id === "string") {
       const area = this.raw(patch.area_id);
-      if (!area || area.deleted_at || area.type !== "area" || areaDenied(area, access, areas)) throw new ApiError(404, "not_found", "Not found.");
+      if (!area || area.deleted_at || area.type !== "area" || areaDenied(area, withoutTypeList(access), areas)) throw new ApiError(404, "not_found", "Not found.");
     }
     const change = this.patchedTier(target, patch, areas);
     if (!covers(change.to, change.from)) throw new ApiError(422, "tier_floor", "A proposal cannot make a row more visible.");
@@ -4735,6 +4773,12 @@ const CALENDAR_INTERVAL_MINUTES = 15;
 /** A Private grant for an agent key ends after at most this many days. The owner renews it. */
 /** The tier of the items of a new area, when the caller gives none. */
 const AREA_TIER_BY_ROLE: Record<string, Tier> = { health: "sealed", money: "sealed", family: "private" };
+const PURPOSE_MAX = 200;
+
+/** The same access with no list of types. To check the area that a row is filed in: the area is not a task. */
+function withoutTypeList(access: Access): Access {
+  return access.principal.allowTypes ? { ...access, principal: { ...access.principal, allowTypes: null } } : access;
+}
 const PRIVATE_DAYS_MAX = 90;
 /** One request for busy times covers at most this many days. */
 const FREE_BUSY_DAYS_MAX = 60;

@@ -93,11 +93,12 @@ API keys and paired devices are one table. The secret format is `hmn_` plus 32 r
 | max_tier | text | The highest tier this credential may receive. |
 | vault | integer | `1` only for a paired phone. Required to mint a vault grant. |
 | allow_types | text, nullable | JSON array of types. Null means every type. |
-| allow_areas | text, nullable | JSON array of area ids. Null means every area that is not denied. |
+| allow_areas | text, nullable | JSON array of area ids, and the word `none` for the rows that have no area. Null means every area that is not denied. A list means exactly what it says: see "The ceiling of an agent key". |
 | deny_areas | text, nullable | JSON array. An entry is the id of an area, or `role:<name>` for each area whose kind has that role. Wins over allow, and wins even if a tier was set too low. |
 | forced_ceiling | text, nullable | Panic. When set, the effective ceiling cannot rise above it. |
 | expires_at | text, nullable | After this instant the secret is rejected. |
 | private_until | text, nullable | For an agent key: the Private grant is open until this instant. After it the key reads at Personal again. Null is no grant. |
+| purpose | text, nullable | The job of the key in the owner's words, at most 200 characters. It is a label for the owner. It is not a security control, and no answer to an agent has it. Null is no purpose. |
 | free_busy | integer | `1` when the owner lets this key read busy times. The default is `0`. |
 | guest | integer | `1` for the agent of another person. A guest is an outside client at Public, and it can propose one thing: a new event. |
 | created_at | text | |
@@ -376,11 +377,21 @@ Nothing gives Sealed: not the vault mark, not a tier in the row, not a vault gra
 
 A guest is always Public. `POST /api/v1/external/clients` with `guest: true` makes one, and a `ceiling` in the same body changes nothing. A guest can file one kind of proposal: `create` of an `event`. The server keeps the title, the start, `properties.end_at`, and at most 2,000 characters of text. It sets the kind to `appointment` and the status to `upcoming`, and it drops the area, the tier, the links, and each other property. The proposal is Personal, so the guest cannot read it back. The guest can read its state with `proposal_status`, which gives no entity id above the ceiling of the caller. A guest's text in the inbox is at most 2,000 characters.
 
-`GET /api/v1/keys` lists the keys with what each one reads now, and no secret. `POST /api/v1/keys` makes a key for one local agent, with `name`, `ceiling` (`public` or `personal`), `days`, `allow_areas`, `allow_types`, and `deny_areas`. A caller on the mini sees the key once, and the server puts it in the Keychain as `hmn.agent.<name>`. A caller that is not on the mini gets no key: the server needs its Keychain for that, or it answers `make_on_mini`. `POST /api/v1/keys/:id` changes the limits or the end date.
+`GET /api/v1/keys` lists the keys with what each one reads now, and no secret. `POST /api/v1/keys` makes a key for one local agent, with `name`, `ceiling` (`public` or `personal`), `days`, `purpose`, `allow_areas`, `allow_types`, and `deny_areas`. A caller on the mini sees the key once, and the server puts it in the Keychain as `hmn.agent.<name>`. A caller that is not on the mini gets no key: the server needs its Keychain for that, or it answers `make_on_mini`. `POST /api/v1/keys/:id` changes the limits, the purpose, or the end date. A `purpose` of `""` or `null` clears it, and a body with no `purpose` keeps it. The key list and `GET /api/v1/access/:id/scope` give the `purpose` to the owner.
 
 **A view key.** `POST /api/v1/keys` with `scope: "read"` makes a key for a view, such as a display or a widget of another project. Its id starts with `view_`, and on the mini its Keychain item is `hmn.view.<name>`. Its ceiling is Public, or Personal when the body has `ceiling: "personal"`. The surface that the caller names does not raise it. A view key cannot file a proposal, cannot capture to the inbox, cannot write, and cannot open the vault. `POST /api/v1/keys/:id/private` answers `409` with the code `view_key`. The limits, the end date, the revoke, and the read log are the same as for an agent key. `GET /api/v1/keys` gives each key with its `scope`, so the list also has the display key of the first boot. The read contract is in [STRATEGY.md](STRATEGY.md).
 
 `GET /api/v1/keys/:id/preview` shows what Private adds for that key, from the real graph: the count by type and by area, and five titles that the viewer can read. `POST /api/v1/keys/:id/private` with `{days, understood: true}` gives Private for 1 to 90 days. `DELETE /api/v1/keys/:id/private` ends it. A revoke also ends it, and removes the key from the Keychain. Each step is in the audit log.
+
+**The allow list is the job of a key.** The owner gives an agent a job, and a broad key is the exception. `allow_areas` and `allow_types` cut what the key reads, below its ceiling. They apply on every path of an agent: `search`, `get_entity`, `list_entities`, `list_links`, `neighbours` (both ends of each edge), `today`, `upcoming`, `week`, `person_page`, `expiring`, `free_busy`, the counts on the agent page, and the proposals of the key. All of them read through one rule, `areaDenied` in `server/src/policy.ts`.
+
+- An area row counts as its own area. A key with `allow_areas: ["area_cars"]` reads the Cars area and the rows in it, and no other area.
+- A row with no area is closed to a key that has an `allow_areas` list. The word `none` in the list opens it: `["area_cars", "none"]`. An allow list means exactly what it says. `keyLimits` accepts `none` only inside `allow_areas`, and it refuses any other word that is not an area id.
+- `allow_types` keeps the key to those types. An area is a type, so a key with `allow_types: ["task"]` does not read area rows. It still reads the tasks in an area.
+- A key with no list (null) reads every area that `deny_areas` leaves open, and every type.
+- `deny_areas` still works and still wins. A new key starts with `["role:health", "role:money"]`. The app does not edit it, and the agent page shows it in words only when it is not that default.
+- `free_busy` gives the busy times of the events that the key could read, so an area or type list cuts it.
+- A proposal of such a key is inside the list too. A new row has an allowed type and an allowed area (or no area, when the list has `none`). An update does not move a row to an area outside the list, or out of every area when `none` is not in the list. A proposal that is outside the list gets `403` with the code `outside_scope`, or `404` for a row that the key cannot read. A key reads no inbox item, because an inbox item has no area and no type.
 
 ### Kinds and roles
 

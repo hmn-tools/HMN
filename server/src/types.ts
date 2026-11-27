@@ -132,6 +132,8 @@ export type CredentialRow = {
   guest?: number;
   /** The credential that made this one. */
   created_by?: string | null;
+  /** The job of an agent key, in the owner's words. Owner only. */
+  purpose?: string | null;
   /** Set for the phone of a household member. */
   member_role?: string | null;
   person_id?: string | null;

@@ -361,8 +361,9 @@ final class APIClient: NSObject, URLSessionDelegate {
         try await send("/api/v1/keys", surface: "phone")
     }
     /// A view key has the scope `read`. It starts at Public, and it cannot propose.
-    func createAgentKey(name: String, view: Bool = false) async throws -> AgentKey {
-        let body: [String: Any] = view ? ["name": name, "scope": "read"] : ["name": name]
+    func createAgentKey(name: String, view: Bool = false, job: [String: Any] = [:]) async throws -> AgentKey {
+        var body: [String: Any] = view ? ["name": name, "scope": "read"] : ["name": name]
+        if !view { body.merge(job) { _, new in new } }
         return try await sendJSON("/api/v1/keys", method: "POST", surface: "phone", body: body)
     }
     func changeKey(_ id: String, fields: [String: Any]) async throws -> AgentKey {

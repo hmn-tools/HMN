@@ -89,7 +89,9 @@ curl --cacert "$CA" -H "Authorization: Bearer $HMN_OWNER_KEY" -H "Content-Type: 
 
 On the mini the answer shows the key once, and the server also puts it in the Keychain as `hmn.agent.research`. Start that agent with `--key-name research`. The owner can also make a key on the phone, in Settings, Agent keys. The phone never receives the key.
 
-A new key is Personal or Public. It can have `allow_areas`, `allow_types`, and `deny_areas`, and it ends after `days` (90 by default). Areas with the role `health` or `money` are closed unless the owner removes that role from `deny_areas` for this key.
+A new key is Personal or Public. It can have `purpose`, `allow_areas`, `allow_types`, and `deny_areas`, and it ends after `days` (90 by default). Areas with the role `health` or `money` are closed unless the owner removes that role from `deny_areas` for this key.
+
+**Give each agent a job and an area.** A broad key is the exception. Choose the areas that the agent needs, and the types if you can, and the agent reads nothing else. A key with `allow_areas` does not read rows that have no area, unless the list also holds the word `none`. Add a `purpose`, at most 200 characters, to remember what the key is for. The purpose is for you: the agent never receives it. In the app, open the page of the agent, and use the Job card.
 
 **A view.** Software that only shows rows, such as a display or a widget, gets a view key: `{"name":"kitchen","scope":"read"}` in the same call. A view key reads Public rows, or Personal rows if the owner asks, and it cannot propose. A local MCP client starts with `--view-name kitchen`, and it gets only the tools that read.
 
