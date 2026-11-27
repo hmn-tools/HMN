@@ -66,9 +66,12 @@ struct ListsView: View {
                         .textFieldStyle(FieldStyle())
                         .submitLabel(.done)
                         .onSubmit { Task { await create() } }
-                    HStack(spacing: 6) {
-                        ForEach(["household", "personal", "private"], id: \.self) { tier in
-                            Button(Words.id(tier)) { newTier = tier }.buttonStyle(ChipButtonStyle(selected: newTier == tier))
+                    // A member sees Household and Public. A list made above that would hide itself from its maker.
+                    if !session.isMember {
+                        HStack(spacing: 6) {
+                            ForEach(["household", "personal", "private"], id: \.self) { tier in
+                                Button(Words.id(tier)) { newTier = tier }.buttonStyle(ChipButtonStyle(selected: newTier == tier))
+                            }
                         }
                     }
                     Button("Start the list") { Task { await create() } }
@@ -97,6 +100,7 @@ struct ListsView: View {
             }
             Spacer()
             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, Theme.Space.l)
         .frame(minHeight: 60)

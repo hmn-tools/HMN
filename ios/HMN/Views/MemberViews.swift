@@ -6,6 +6,7 @@ enum MemberTab { case home, lists, family }
 
 struct MemberRootView: View {
     @State private var tab: MemberTab = .home
+    @Environment(\.dynamicTypeSize) private var dynamicType
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -23,9 +24,9 @@ struct MemberRootView: View {
 
     private var tabBar: some View {
         HStack(spacing: 0) {
-            tabButton(.home, "Home")
-            tabButton(.lists, "Lists")
-            tabButton(.family, "Family")
+            tabButton(.home, "Home", symbol: "house")
+            tabButton(.lists, "Lists", symbol: "checklist")
+            tabButton(.family, "Family", symbol: "person.2")
         }
         .padding(.horizontal, 8)
         .frame(height: 64)
@@ -36,17 +37,31 @@ struct MemberRootView: View {
         .padding(.bottom, 4)
     }
 
-    private func tabButton(_ value: MemberTab, _ title: String) -> some View {
+    /// At the largest text sizes the bar shows icons only, as the owner's bar does, so that a label never wraps.
+    private var iconsOnly: Bool { dynamicType >= .accessibility1 }
+
+    private func tabButton(_ value: MemberTab, _ title: String, symbol: String) -> some View {
         Button { tab = value } label: {
-            Text(title)
-                .font(Theme.sans(13, weight: .medium))
-                .foregroundStyle(tab == value ? Theme.ink : Theme.stone)
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .background(tab == value ? Theme.ground : Color.clear)
-                .clipShape(Capsule())
-                .contentShape(Rectangle())
+            VStack(spacing: 2) {
+                Image(systemName: symbol)
+                    .font(.system(size: 18, weight: .regular))
+                    .frame(height: 22)
+                if !iconsOnly {
+                    Text(title)
+                        .font(Theme.sans(11, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                }
+            }
+            .foregroundStyle(tab == value ? Theme.ink : Theme.stone)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(tab == value ? Theme.ground : Color.clear)
+            .clipShape(Capsule())
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
         .accessibilityAddTraits(tab == value ? [.isSelected] : [])
     }
 }
@@ -123,6 +138,7 @@ struct FamilyTasksView: View {
                             }
                             Spacer()
                             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
+                                .accessibilityHidden(true)
                         }
                         .contentShape(Rectangle())
                     }
@@ -145,28 +161,16 @@ struct FamilyTasksView: View {
                     if routine.dueToday {
                         TickButton(done: routine.doneToday, title: routine.habit.title, routine: true) { Task { await tick(routine) } }
                     } else {
-                        Image(systemName: "minus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.hair).frame(width: 44, height: 44)
+                        Image(systemName: "minus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.stone).frame(width: 44, height: 44)
                             .accessibilityLabel("Not today")
                     }
-                    Button { if !session.isMember { editing = routine } } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(routine.habit.title)
-                                    .font(Theme.row)
-                                    .strikethrough(routine.doneToday, color: Theme.stone)
-                                    .foregroundStyle(routine.doneToday || !routine.dueToday ? Theme.stone : Theme.ink)
-                                Text(routine.subtitle).font(Theme.small).foregroundStyle(Theme.stone)
-                            }
-                            Spacer()
-                            if !session.isMember {
-                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
-                                    .accessibilityHidden(true)
-                            }
-                        }
-                        .contentShape(Rectangle())
+                    if session.isMember {
+                        routineLabel(routine)
+                    } else {
+                        Button { editing = routine } label: { routineLabel(routine) }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Opens the routine")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityHint(session.isMember ? "" : "Opens the routine")
                 }
                 .padding(.leading, 6)
                 .padding(.trailing, Theme.Space.l)
@@ -182,6 +186,25 @@ struct FamilyTasksView: View {
             }
         }
         .card(padding: 0)
+    }
+
+    /// The words of a routine row, with a chevron only when the row opens (the owner's phone).
+    private func routineLabel(_ routine: Routine) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(routine.habit.title)
+                    .font(Theme.row)
+                    .strikethrough(routine.doneToday, color: Theme.stone)
+                    .foregroundStyle(routine.doneToday || !routine.dueToday ? Theme.stone : Theme.ink)
+                Text(routine.subtitle).font(Theme.small).foregroundStyle(Theme.stone)
+            }
+            Spacer()
+            if !session.isMember {
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(Rectangle())
     }
 
     private func load() async {

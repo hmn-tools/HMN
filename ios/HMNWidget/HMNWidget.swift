@@ -5,6 +5,7 @@ import WidgetKit
 
 struct WidgetScreen: Decodable {
     var dueCount: Int
+    var dateLabel: String?
     var updatedLabel: String
     var next: Next?
     var sections: [Section]
@@ -21,6 +22,60 @@ private enum WidgetSnapshot {
     }
 }
 
+/// When the snapshot was made, read from its own labels ("FRI 27/11/2026" and "12:30"). The snapshot has no instant,
+/// and what is written for the widget does not change. A label that cannot be read gives nil, and the widget then
+/// shows the snapshot as it is.
+extension WidgetScreen {
+    var madeAt: Date? {
+        guard let dateLabel else { return nil }
+        let parts = dateLabel.split(separator: " ").last?.split(separator: "/").compactMap { Int($0) } ?? []
+        let clock = updatedLabel.split(separator: ":").compactMap { Int($0) }
+        guard parts.count == 3, clock.count == 2 else { return nil }
+        return Calendar.current.date(from: DateComponents(year: parts[2], month: parts[1], day: parts[0], hour: clock[0], minute: clock[1]))
+    }
+
+    /// True when the snapshot is from an earlier day than the moment the widget shows.
+    func isStale(at moment: Date) -> Bool {
+        guard let madeAt else { return false }
+        return !Calendar.current.isDate(madeAt, inSameDayAs: moment)
+    }
+}
+
+/// A tiny copy of the app's `When` (ios/HMN/Views/RecordView.swift). The widget is its own target.
+enum WidgetWhen {
+    private static let weekday: DateFormatter = {
+        let format = DateFormatter()
+        format.dateFormat = "EEE d MMM"
+        return format
+    }()
+    private static let withYear: DateFormatter = {
+        let format = DateFormatter()
+        format.dateFormat = "d MMM yyyy"
+        return format
+    }()
+    private static let clock: DateFormatter = {
+        let format = DateFormatter()
+        format.dateStyle = .none
+        format.timeStyle = .short
+        return format
+    }()
+
+    static func day(_ date: Date, now: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDate(date, inSameDayAs: now) { return "Today" }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) { return "Yesterday" }
+        if calendar.isDate(date, equalTo: now, toGranularity: .year) { return weekday.string(from: date) }
+        return withYear.string(from: date)
+    }
+
+    /// "Today 12:30", "Yesterday 12:30", "Thu 26 Nov, 12:30".
+    static func stamp(_ date: Date, now: Date) -> String {
+        let day = day(date, now: now)
+        let time = clock.string(from: date)
+        return day == "Today" || day == "Yesterday" ? "\(day) \(time)" : "\(day), \(time)"
+    }
+}
+
 struct Entry: TimelineEntry {
     var date: Date
     var screen: WidgetScreen?
@@ -32,8 +87,13 @@ struct Provider: TimelineProvider {
         completion(Entry(date: .now, screen: WidgetSnapshot.load()))
     }
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> Void) {
-        let entry = Entry(date: .now, screen: WidgetSnapshot.load())
-        completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(3600))))
+        let screen = WidgetSnapshot.load()
+        // A second entry at midnight, so a snapshot from this evening does not pass for tomorrow's.
+        var entries = [Entry(date: .now, screen: screen)]
+        if let midnight = Calendar.current.nextDate(after: .now, matching: DateComponents(hour: 0, minute: 0), matchingPolicy: .nextTime) {
+            entries.append(Entry(date: midnight, screen: screen))
+        }
+        completion(Timeline(entries: entries, policy: .after(Date().addingTimeInterval(3600))))
     }
 }
 
@@ -43,14 +103,40 @@ struct HMNWidgetView: View {
 
     var body: some View {
         if let screen = entry.screen {
-            if family == .systemSmall { small(screen) } else { medium(screen) }
+            if screen.isStale(at: entry.date) {
+                stale(screen)
+            } else if family == .systemSmall {
+                small(screen)
+            } else {
+                medium(screen)
+            }
         } else {
-            Text("Open HMN to pair this phone.")
-                .font(WidgetFont.small)
-                .foregroundStyle(WidgetColor.graphite)
-                .padding()
-                .containerBackground(WidgetColor.card, for: .widget)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("HMN").font(WidgetFont.label).foregroundStyle(WidgetColor.stone)
+                Text("Open HMN to pair this phone.")
+                    .font(WidgetFont.small)
+                    .foregroundStyle(WidgetColor.graphite)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .padding(14)
+            .containerBackground(WidgetColor.card, for: .widget)
         }
+    }
+
+    /// A snapshot from an earlier day. It says when it was made and shows no count, so it does not look like today.
+    private func stale(_ screen: WidgetScreen) -> some View {
+        let since = screen.madeAt.map { WidgetWhen.stamp($0, now: entry.date) } ?? screen.updatedLabel
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("HMN · TODAY").font(WidgetFont.label).foregroundStyle(WidgetColor.stone)
+            Text("Not updated since \(since).")
+                .font(WidgetFont.row)
+                .foregroundStyle(WidgetColor.ink)
+            Text("Open HMN to see today.").font(WidgetFont.small).foregroundStyle(WidgetColor.graphite)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .padding(14)
+        .containerBackground(WidgetColor.card, for: .widget)
     }
 
     private func small(_ screen: WidgetScreen) -> some View {
@@ -58,37 +144,38 @@ struct HMNWidgetView: View {
             HStack {
                 Text("TODAY")
                 Spacer()
-                Button(intent: OpenCaptureIntent()) {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(.plain)
-                Text("\(screen.dueCount) DUE")
+                captureButton
             }
             .font(WidgetFont.label)
             .foregroundStyle(WidgetColor.stone)
-            Text("\(screen.dueCount)").font(WidgetFont.sans(40, .semibold)).foregroundStyle(WidgetColor.ink)
+            Text("\(screen.dueCount)")
+                .font(WidgetFont.sans(40, .semibold))
+                .foregroundStyle(WidgetColor.ink)
+                .accessibilityLabel(screen.dueCount == 1 ? "1 thing due" : "\(screen.dueCount) things due")
+            Text("due")
+                .font(WidgetFont.small)
+                .foregroundStyle(WidgetColor.stone)
             if let next = screen.next {
                 Text("Next: \(next.title)").font(WidgetFont.row).foregroundStyle(WidgetColor.ink).lineLimit(2)
-                Text(next.subtitle).font(WidgetFont.small).foregroundStyle(WidgetColor.stone)
+                Text(next.subtitle).font(WidgetFont.small).foregroundStyle(WidgetColor.stone).lineLimit(1)
             } else {
                 Text("Nothing coming.").font(WidgetFont.small).foregroundStyle(WidgetColor.graphite)
             }
             Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .padding(14)
         .containerBackground(WidgetColor.card, for: .widget)
     }
 
     private func medium(_ screen: WidgetScreen) -> some View {
-        let due = screen.sections.first { $0.id == "due" }?.items.prefix(3) ?? []
+        let all = screen.sections.first { $0.id == "due" }?.items ?? []
+        let due = all.prefix(3)
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("HMN · TODAY")
                 Spacer()
-                Button(intent: OpenCaptureIntent()) {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(.plain)
+                captureButton
                 Text("UPDATED \(screen.updatedLabel)")
             }
             .font(WidgetFont.label)
@@ -102,10 +189,22 @@ struct HMNWidgetView: View {
                     Text(item.title).font(WidgetFont.row).foregroundStyle(WidgetColor.ink).lineLimit(1)
                 }
             }
+            if all.count > due.count {
+                Text("+\(all.count - due.count) more").font(WidgetFont.small).foregroundStyle(WidgetColor.stone)
+            }
             Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .padding(14)
         .containerBackground(WidgetColor.card, for: .widget)
+    }
+
+    private var captureButton: some View {
+        Button(intent: OpenCaptureIntent()) {
+            Image(systemName: "plus")
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Capture something")
     }
 }
 
@@ -150,7 +249,9 @@ struct LockWidgetView: View {
             if family == .accessoryInline {
                 Text(title)
             } else if family == .accessoryCircular {
-                Text(title.prefix(1)).font(.headline)
+                Text(entry.card.map { "\($0.dueCount)" } ?? "HMN")
+                    .font(.headline)
+                    .accessibilityLabel(entry.card.map { "\($0.dueCount) due" } ?? "HMN")
             } else {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(WidgetFont.sans(13, .medium)).lineLimit(1)
