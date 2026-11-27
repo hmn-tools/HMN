@@ -134,6 +134,8 @@ export type CredentialRow = {
   created_by?: string | null;
   /** The job of an agent key, in the owner's words. Owner only. */
   purpose?: string | null;
+  /** 1 when the owner lets this agent key keep its own memory: it may read the feed of changes. */
+  memory?: number;
   /** Set for the phone of a household member. */
   member_role?: string | null;
   person_id?: string | null;
@@ -181,6 +183,8 @@ export type Principal = {
   privateGrant?: boolean;
   /** True when the owner lets this key read busy times. */
   freeBusy?: boolean;
+  /** True when the owner lets this key read the feed of changes. Never true for an outside client, a guest, or a view key. */
+  memory?: boolean;
   /** True for the agent of another person. It reads Public, and it proposes an event or an inbox item only. */
   guest?: boolean;
   /** A member of the household: a person who uses HMN through the app, with a role. docs/ONTOLOGY.md, section 5.4. */

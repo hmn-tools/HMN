@@ -56,6 +56,11 @@ export function ensureApprovalTables(db: Database) {
   if (credentialColumns.size > 0 && !credentialColumns.has("created_by")) db.exec("ALTER TABLE credentials ADD COLUMN created_by TEXT");
   // What the owner made this key for, in a few words. For the owner only: it is never sent to the agent.
   if (credentialColumns.size > 0 && !credentialColumns.has("purpose")) db.exec("ALTER TABLE credentials ADD COLUMN purpose TEXT");
+  // The owner lets this key keep its own memory: it may ask for the feed of changed rows. Off by default.
+  if (credentialColumns.size > 0 && !credentialColumns.has("memory")) db.exec("ALTER TABLE credentials ADD COLUMN memory INTEGER NOT NULL DEFAULT 0");
+  // How many rows of the feed each key received, for the daily limit. The key is the name, so a rotated key keeps its count.
+  db.exec("CREATE TABLE IF NOT EXISTS feed_log (seq INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, key_name TEXT NOT NULL, n INTEGER NOT NULL)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_feed_log_key ON feed_log(key_name, at)");
   // The key that sent an inbox item, for the budget of that key. Null for an item from before this column.
   const inboxColumns = new Set((db.query("PRAGMA table_info(inbox_items)").all() as Array<{ name: string }>).map((row) => row.name));
   if (inboxColumns.size > 0 && !inboxColumns.has("credential_id")) db.exec("ALTER TABLE inbox_items ADD COLUMN credential_id TEXT");

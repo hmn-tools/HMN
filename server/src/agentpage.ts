@@ -93,6 +93,7 @@ function readLines(rows: ReadRow[]): TimelineItem[] {
     let text: string;
     if (start.action === "search") text = `Searched for "${start.detail ?? ""}": ${count === 0 ? "no rows" : plural("row", count)}`;
     else if (start.action === "neighbours") text = `Followed the links of a row: ${count === 0 ? "no rows" : plural("row", count)}`;
+    else if (start.action === "changes_since") text = `Asked for what changed: ${count === 0 ? "no rows" : plural("row", count)}`;
     else if (start.action === "free_busy") text = "Checked the free and busy times";
     else if (start.action === "read") text = `Read ${plural("row", count)}${kinds ? ` (${kinds})` : ""}`;
     else text = `${capital(start.action.replaceAll("_", " "))}${start.detail ? `: ${start.detail}` : ""}`;

@@ -10,6 +10,8 @@ struct JobDraft: Equatable {
     var areas: Set<String> = []
     var noArea = false
     var types: Set<String> = []
+    /// True when the owner lets the agent keep its own copy and ask for the feed of changes.
+    var memory = false
     /// True when the key has no area list: it reads every area up to its ceiling.
     var areasOpen = true
 
@@ -30,6 +32,7 @@ struct JobDraft: Equatable {
             noArea = list.contains("none")
         }
         types = Set(key.allowTypes ?? [])
+        memory = key.memory == true
     }
 
     /// The job of a new key: it reads no area until the owner chooses one.
@@ -62,7 +65,7 @@ struct JobDraft: Equatable {
     var fields: [String: Any] {
         let list: Any = areasOpen ? NSNull() : (areas.sorted() + (noArea ? ["none"] : []))
         let kinds: Any = types.isEmpty ? NSNull() : DraftOrder.sorted(types)
-        return ["purpose": purpose.trimmingCharacters(in: .whitespacesAndNewlines), "allow_areas": list, "allow_types": kinds]
+        return ["purpose": purpose.trimmingCharacters(in: .whitespacesAndNewlines), "allow_areas": list, "allow_types": kinds, "memory": memory]
     }
 }
 
@@ -170,6 +173,14 @@ struct JobCard: View {
         VStack(alignment: .leading, spacing: 12) {
             SmallLabel(text: "Job")
             JobChoices(draft: $draft, areas: areas)
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle(isOn: $draft.memory) {
+                    Text("Keeps its own memory").font(Theme.text)
+                }
+                .tint(Theme.tealDark)
+                Text("It can ask for each change it is allowed to see, up to 2,000 rows a day. Turn this on only for an agent you trust to hold a copy.")
+                    .font(Theme.small).foregroundStyle(Theme.stone)
+            }
             if let message { MessageLine(text: message, isError: failed) }
             Button("Save the job") { Task { await save() } }
                 .buttonStyle(PillButtonStyle())

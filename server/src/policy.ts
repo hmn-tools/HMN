@@ -65,6 +65,7 @@ export function principalFromRow(row: CredentialRow, nowIso?: string): Principal
     // A grant is for an agent key that is not held at Public, and it has an end.
     privateGrant: Boolean(nowIso && row.scope === "agent" && row.max_tier !== "public" && row.max_tier !== "household" && row.private_until && row.private_until > nowIso),
     freeBusy: row.free_busy === 1,
+    memory: row.memory === 1 && row.scope === "agent" && row.external !== 1 && row.guest !== 1,
     guest: row.guest === 1,
     ...memberOf(row),
   };

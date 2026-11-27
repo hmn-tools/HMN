@@ -1607,6 +1607,104 @@ export class Hmn {
     };
   }
 
+  /**
+   * The feed of changed rows, for a key that keeps its own memory. The source is `entity_versions`: each version
+   * has a place in the table (its rowid, which only grows), and the cursor is that place. A call with no cursor
+   * returns a cursor for now and no rows. Each row that comes back is read through the key's ceiling, its allow
+   * lists, and its deny list, as `get_entity` reads it. A row that leaves the key's view comes back as `removed`
+   * with no entity, and only when the key could read the version before: the feed does not name a row that the
+   * key could never see. The limit of rows a day counts over the last 24 hours, by key name, so a rotation keeps it.
+   */
+  changesSince(access: Access, args: Record<string, unknown>) {
+    if (!access.principal.memory) {
+      throw new ApiError(403, "no_memory", "This key does not keep its own memory. The owner turns that on for one key.");
+    }
+    let limit = FEED_PAGE_DEFAULT;
+    if (args.limit !== undefined && args.limit !== null) {
+      limit = Number(args.limit);
+      if (!Number.isInteger(limit) || limit < 1 || limit > FEED_PAGE_MAX) throw new ApiError(422, "bad_limit", `The limit is a whole number from 1 to ${FEED_PAGE_MAX}.`);
+    }
+    const db = this.store.db;
+    const top = (db.query("SELECT COALESCE(MAX(rowid), 0) AS r FROM entity_versions").get() as { r: number }).r;
+    const cursorOf = (place: number) => `c1.${Buffer.from(String(place)).toString("base64url")}`;
+    const given = args.cursor;
+    if (given === undefined || given === null || given === "") {
+      this.noteQuery(access, "changes_since", "first call: a cursor for now");
+      return { cursor: cursorOf(top), more: false, changes: [] };
+    }
+    const match = typeof given === "string" ? /^c1\.([A-Za-z0-9_-]{1,20})$/.exec(given) : null;
+    const decoded = match ? Number(Buffer.from(match[1]!, "base64url").toString()) : NaN;
+    if (!Number.isInteger(decoded) || decoded < 0) throw new ApiError(422, "bad_cursor", "That cursor is not one that this server gave. Call again with no cursor to start from now.");
+    // A cursor ahead of the newest version is not possible, except after a purge of the newest rows. Start from the top.
+    const after = Math.min(decoded, top);
+
+    const now = this.now();
+    const since = new Date(now.getTime() - 86_400_000).toISOString();
+    db.query("DELETE FROM feed_log WHERE at <= ?").run(since);
+    const name = access.principal.name;
+    const used = (db.query("SELECT COALESCE(SUM(n), 0) AS n FROM feed_log WHERE key_name = ?").get(name) as { n: number }).n;
+    if (used >= FEED_DAILY_MAX) {
+      const oldest = db.query("SELECT MIN(at) AS at FROM feed_log WHERE key_name = ?").get(name) as { at: string | null };
+      const resets = new Date(Date.parse(oldest.at ?? now.toISOString()) + 86_400_000).toISOString();
+      throw new ApiError(429, "feed_limit", `This key has read ${FEED_DAILY_MAX.toLocaleString("en-US")} changed rows in the last 24 hours, which is the limit. It can read more from ${resets}.`);
+    }
+    const cap = Math.min(limit, FEED_DAILY_MAX - used);
+
+    const areas = this.areaMap();
+    const sealedOk = covers(access.ceiling, "sealed");
+    // Could this key read this version, with its limits now? The tier and the area are those of the version.
+    const seen = (v: VersionRow): boolean => {
+      if (v.tombstone || (v.content_sealed && !sealedOk)) return false;
+      const home = { id: v.entity_id, type: v.type, area_id: v.area_id };
+      if (areaDenied(home, access, areas)) return false;
+      const declared = v.tier && isTier(v.tier) ? v.tier : null;
+      return covers(rowCeiling(access, home, areas), ownTier({ type: v.type, tier: declared, area_id: v.area_id }, areas).tier);
+    };
+    const byId = db.query("SELECT * FROM entity_versions WHERE id = ?");
+    const batch = db.query("SELECT rowid AS rid, * FROM entity_versions WHERE rowid > ? ORDER BY rowid ASC LIMIT ?").all(after, FEED_SCAN_MAX) as Array<VersionRow & { rid: number }>;
+    type Slot = { id: string; type: string; change: "created" | "changed" | "removed"; at: string };
+    const slots = new Map<string, Slot>();
+    let place = after;
+    for (const v of batch) {
+      if (!slots.has(v.entity_id) && slots.size >= cap) break;
+      place = v.rid;
+      const before = v.supersedes_id ? (byId.get(v.supersedes_id) as VersionRow | null) : null;
+      const wasSeen = before ? seen(before) : false;
+      let change: Slot["change"] | null = null;
+      if (seen(v)) change = wasSeen ? "changed" : "created";
+      else if (wasSeen) change = "removed";
+      if (!change) continue;
+      const earlier = slots.get(v.entity_id);
+      // The agent has not heard of a row that this page made, so a later edit in the page keeps it new.
+      if (change === "changed" && earlier?.change === "created") change = "created";
+      slots.delete(v.entity_id);
+      slots.set(v.entity_id, { id: v.entity_id, type: v.type, change, at: v.valid_from });
+    }
+    const more = (db.query("SELECT 1 AS x FROM entity_versions WHERE rowid > ? LIMIT 1").get(place) as { x: number } | null) !== null;
+    const changes: Array<{ id: string; type: string; change: string; at: string; entity?: EntityView }> = [];
+    const read: EntityView[] = [];
+    for (const slot of slots.values()) {
+      if (slot.change !== "removed") {
+        const head = this.raw(slot.id);
+        const view = head ? projectEntity(head, areas, access, this.store.sealedKey) : null;
+        // The row is not in the view now: a later version, past this page, moved it out. It is removed for this key.
+        if (view) {
+          changes.push({ id: slot.id, type: slot.type, change: slot.change, at: slot.at, entity: view });
+          read.push(view);
+          continue;
+        }
+        slot.change = "removed";
+      }
+      changes.push({ id: slot.id, type: slot.type, change: "removed", at: slot.at });
+    }
+    // One grouped read: the agent page shows the call as one line, with the count of rows.
+    this.noteQuery(access, "changes_since", `${changes.length} changes`);
+    for (const view of read) this.noteRead(access, view);
+    if (changes.length) db.query("INSERT INTO feed_log (at, key_name, n) VALUES (?, ?, ?)").run(now.toISOString(), name, changes.length);
+    this.store.persist();
+    return { cursor: cursorOf(place), more, changes };
+  }
+
   /** The keys of agents, outside clients, and views, with what each one can read now. No secret is in the answer. */
   keysList(access: Access) {
     assertScope(access, "write");
@@ -1633,6 +1731,8 @@ export class Hmn {
       allow_types: principal.allowTypes,
       // The job of the key, for the owner. It is not in any answer that an agent gets.
       purpose: row.purpose ?? null,
+      // The key keeps its own memory: it may read the feed of changes.
+      memory: row.memory === 1,
       last_used_at: row.last_used_at ?? null,
       state: row.revoked_at ? "revoked" : ended ? "ended" : "active",
       source: `key:${row.id}`,
@@ -1664,6 +1764,20 @@ export class Hmn {
     const text = body.purpose.replace(/\s+/g, " ").trim();
     if (text.length > PURPOSE_MAX) throw new ApiError(422, "bad_purpose", `The purpose is at most ${PURPOSE_MAX} characters.`);
     return text || null;
+  }
+
+  /**
+   * Whether the key keeps its own memory, from a request. Absent keeps the old value. Only the key of a local agent
+   * can have it: a view key, an outside client, and a guest cannot.
+   */
+  private keyMemory(body: Record<string, unknown>, before: CredentialRow | null, scope: string): boolean {
+    const was = before?.memory === 1;
+    if (!("memory" in body)) return was;
+    if (typeof body.memory !== "boolean") throw new ApiError(422, "bad_value", "memory is true or false.");
+    if (body.memory && (scope !== "agent" || before?.external === 1 || before?.guest === 1)) {
+      throw new ApiError(409, "no_memory", "Only the key of a local agent can keep its own memory.");
+    }
+    return body.memory;
   }
 
   /** The limits of a key, from a request. A list that is absent keeps the value that the caller gives as `before`. */
@@ -1718,6 +1832,7 @@ export class Hmn {
     if (!ceiling) throw new ApiError(422, "bad_tier", "A new key is Public, Household, or Personal. Private is a grant that you give after this, with an end date.");
     const limits = this.keyLimits(body, { deny: ["role:health", "role:money"], areas: null, types: null });
     const purpose = this.keyPurpose(body, null);
+    const memory = this.keyMemory(body, null, scope);
     const local = isLoopback(ip);
     const secret = randomSecret();
     const stored = scope === "read" ? rememberViewKey(name, secret) : rememberAgentKey(name, secret);
@@ -1731,11 +1846,12 @@ export class Hmn {
       .query(
         `INSERT INTO credentials (
           id, name, kind, key_hash, scope, max_tier, vault, allow_types, allow_areas, deny_areas,
-          forced_ceiling, expires_at, created_at, revoked_at, rotated_from, created_by, purpose
-        ) VALUES (?, ?, 'key', ?, ?, ?, 0, ?, ?, ?, NULL, ?, ?, NULL, NULL, ?, ?)`,
+          forced_ceiling, expires_at, created_at, revoked_at, rotated_from, created_by, purpose, memory
+        ) VALUES (?, ?, 'key', ?, ?, ?, 0, ?, ?, ?, NULL, ?, ?, NULL, NULL, ?, ?, ?)`,
       )
-      .run(id, name, sha256hex(secret), scope, ceiling, limits.types ? JSON.stringify(limits.types) : null, limits.areas ? JSON.stringify(limits.areas) : null, JSON.stringify(limits.deny), expires, now.toISOString(), access.principal.id, purpose);
+      .run(id, name, sha256hex(secret), scope, ceiling, limits.types ? JSON.stringify(limits.types) : null, limits.areas ? JSON.stringify(limits.areas) : null, JSON.stringify(limits.deny), expires, now.toISOString(), access.principal.id, purpose, memory ? 1 : 0);
     this.appendAudit({ actor: access.principal.id, action: "key_create", tier: ceiling, entity_type: "credential", entity_id: id, surface: access.surface });
+    if (memory) this.appendAudit({ actor: access.principal.id, action: "memory_on", tier: null, entity_type: "credential", entity_id: id, surface: access.surface });
     this.store.persist();
     return {
       ...this.keyView(this.agentKey(id), now.toISOString()),
@@ -1765,10 +1881,12 @@ export class Hmn {
       freeBusy = body.free_busy;
     }
     const purpose = this.keyPurpose(body, row.purpose ?? null);
+    const memory = this.keyMemory(body, row, row.scope);
     this.store.db
-      .query("UPDATE credentials SET allow_types = ?, allow_areas = ?, deny_areas = ?, expires_at = ?, free_busy = ?, purpose = ? WHERE id = ?")
-      .run(limits.types ? JSON.stringify(limits.types) : null, limits.areas ? JSON.stringify(limits.areas) : null, JSON.stringify(limits.deny), expires, freeBusy ? 1 : 0, purpose, id);
+      .query("UPDATE credentials SET allow_types = ?, allow_areas = ?, deny_areas = ?, expires_at = ?, free_busy = ?, purpose = ?, memory = ? WHERE id = ?")
+      .run(limits.types ? JSON.stringify(limits.types) : null, limits.areas ? JSON.stringify(limits.areas) : null, JSON.stringify(limits.deny), expires, freeBusy ? 1 : 0, purpose, memory ? 1 : 0, id);
     this.appendAudit({ actor: access.principal.id, action: "key_change", tier: null, entity_type: "credential", entity_id: id, surface: access.surface });
+    if (memory !== (row.memory === 1)) this.appendAudit({ actor: access.principal.id, action: memory ? "memory_on" : "memory_off", tier: null, entity_type: "credential", entity_id: id, surface: access.surface });
     this.store.persist();
     return this.keyView(this.agentKey(id), this.now().toISOString());
   }
@@ -1869,7 +1987,7 @@ export class Hmn {
   /** What one key can see now, as counts. The access is built from the credential row, so the secret is not used. */
   agentScope(access: Access, id: string) {
     const { row, keyAccess, ctx } = this.agentPage(access, id);
-    return { ...agentScope(ctx, access, keyAccess, row.id, row.name), purpose: row.purpose ?? null };
+    return { ...agentScope(ctx, access, keyAccess, row.id, row.name), purpose: row.purpose ?? null, memory: row.memory === 1 };
   }
 
   /** The Today screen as one key would get it from the MCP surface. It is not logged as a read by that key. */
@@ -3298,8 +3416,8 @@ export class Hmn {
       .query(
         `INSERT INTO credentials (
           id, name, kind, key_hash, scope, max_tier, vault, allow_types, allow_areas, deny_areas,
-          forced_ceiling, expires_at, created_at, revoked_at, rotated_from, external, guest, free_busy, created_by, purpose
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+          forced_ceiling, expires_at, created_at, revoked_at, rotated_from, external, guest, free_busy, created_by, purpose, memory
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         newId,
@@ -3322,6 +3440,8 @@ export class Hmn {
         row.created_by ?? null,
         // The job label goes with the key to its new secret.
         (row as { purpose?: string | null }).purpose ?? null,
+        // So does the choice to keep its own memory.
+        row.memory ?? 0,
       );
     // What the old credential made now belongs to the new one, so a later revoke still finds it.
     this.store.db.query("UPDATE credentials SET created_by = ? WHERE created_by = ?").run(newId, id);
@@ -4790,6 +4910,11 @@ const KEY_DAYS_DEFAULT = 90;
 const KEY_DAYS_MAX = 365;
 const NEIGHBOUR_MAX = 100;
 const CLIENT_READS_KEEP = 2000;
+/** The feed of changes: rows a key may read in 24 hours, rows in one page, and versions scanned in one call. */
+const FEED_DAILY_MAX = 2000;
+const FEED_PAGE_DEFAULT = 100;
+const FEED_PAGE_MAX = 200;
+const FEED_SCAN_MAX = 1000;
 /** Words that carry no subject in a question. They are dropped when a caller asks for any word. */
 const SEARCH_SMALL_WORDS = new Set([
   "a", "an", "and", "any", "are", "about", "at", "be", "by", "can", "did", "do", "does", "for", "from", "have", "has", "how", "i", "in", "is", "it",

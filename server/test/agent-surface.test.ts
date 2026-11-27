@@ -166,7 +166,7 @@ test("the tool list has read-only labels, and the instructions are short", async
   try {
     expect(INSTRUCTIONS.length).toBeLessThan(2000);
     expect(INSTRUCTIONS).toContain("idempotency_key");
-    expect(READ_ONLY_TOOLS.sort()).toEqual(["describe_schema", "expiring", "free_busy", "get_entity", "list_entities", "list_links", "list_proposals", "my_requests", "neighbours", "person_page", "proposal_status", "search", "today", "upcoming", "week"]);
+    expect(READ_ONLY_TOOLS.sort()).toEqual(["changes_since", "describe_schema", "expiring", "free_busy", "get_entity", "list_entities", "list_links", "list_proposals", "my_requests", "neighbours", "person_page", "proposal_status", "search", "today", "upcoming", "week"]);
     for (const item of TOOLS) {
       expect(item.annotations.destructiveHint).toBe(false);
       expect(item.annotations.openWorldHint).toBe(false);
@@ -232,8 +232,8 @@ test("the stdio entry point is a pipe to the server: one JSON message on each li
     byFile.stdin.end();
     const listed = JSON.parse((await new Response(byFile.stdout).text()).trim()) as { id: number; result: { tools: unknown[] } };
     expect(listed.id).toBe(7);
-    // The key has no permission for busy times, so that one tool is not in its list.
-    expect(listed.result.tools.length).toBe(TOOLS.length - 1);
+    // The key has no permission for busy times and does not keep memory, so those two tools are not in its list.
+    expect(listed.result.tools.length).toBe(TOOLS.length - 2);
 
     // A wrong key gives an error answer, not a stop.
     const wrong = Bun.spawn({ cmd: [process.execPath, script], env: { PATH: process.env.PATH ?? "", HMN_API_KEY: "hmn_wrong", HMN_URL: `http://127.0.0.1:${server.port}`, HMN_CA: script }, stdin: "pipe", stdout: "pipe", stderr: "pipe" });

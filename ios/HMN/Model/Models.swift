@@ -394,6 +394,8 @@ struct AgentKey: Codable, Identifiable {
     var allowTypes: [String]?
     /// What the owner made the key for. For the owner only: the agent never receives it.
     var purpose: String?
+    /// True when the owner lets this key keep its own memory: it may ask for each change it can see.
+    var memory: Bool?
     var lastUsedAt: String?
     var state: String
     var keychainItem: String?
@@ -449,6 +451,7 @@ struct AgentScope: Codable {
     var byArea: [AreaCount]
     var closed: [String]
     var purpose: String?
+    var memory: Bool?
     struct TypeCount: Codable, Identifiable {
         var type: String
         var count: Int

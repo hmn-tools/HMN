@@ -100,6 +100,7 @@ API keys and paired devices are one table. The secret format is `hmn_` plus 32 r
 | private_until | text, nullable | For an agent key: the Private grant is open until this instant. After it the key reads at Personal again. Null is no grant. |
 | purpose | text, nullable | The job of the key in the owner's words, at most 200 characters. It is a label for the owner. It is not a security control, and no answer to an agent has it. Null is no purpose. |
 | free_busy | integer | `1` when the owner lets this key read busy times. The default is `0`. |
+| memory | integer | `1` when the owner lets this agent key keep its own memory, so that it may read the feed of changes (`changes_since`). The default is `0`. Only the key of a local agent can have it: an outside client, a guest, and a view key never do, and the server ignores the column for them. A rotated key keeps it. |
 | guest | integer | `1` for the agent of another person. A guest is an outside client at Public, and it can propose one thing: a new event. |
 | created_at | text | |
 | revoked_at | text, nullable | Revoked secrets fail closed. |
@@ -116,7 +117,7 @@ The seed creates three keys. Devices appear only after pairing.
 
 The owner key cannot open the vault. A leaked copy of it reveals Public, Personal, and Private, and does not reveal Sealed. That is a deliberate bound.
 
-Rotation (`POST /api/v1/credentials/:id/rotate`) issues a new secret and sets the old `revoked_at`. The new credential keeps the scope, the tier, the limits, Hide (`forced_ceiling`), the marks of an outside client, and `created_by`. It does not keep a Private grant. The new secret is returned once. A credential renews its own secret from any address. For another credential the caller is on the mini with a write key, so a phone cannot take the secret of a key.
+Rotation (`POST /api/v1/credentials/:id/rotate`) issues a new secret and sets the old `revoked_at`. The new credential keeps the scope, the tier, the limits, `purpose`, `memory`, Hide (`forced_ceiling`), the marks of an outside client, and `created_by`. It does not keep a Private grant. The new secret is returned once. A credential renews its own secret from any address. For another credential the caller is on the mini with a write key, so a phone cannot take the secret of a key.
 
 A revoke also revokes the keys that the credential made (`kind` `key` with that `created_by`): a key of an agent, a view key, and the key of an outside client. The answer names them in `also_revoked`. A phone that the credential paired stays.
 
@@ -208,7 +209,7 @@ What each agent key, each outside client, and each view key read. The audit log 
 | seq | integer | |
 | at | text | |
 | principal_id | text | The credential id. |
-| action | text | `read`, `search`, or `neighbours`. |
+| action | text | `read`, `search`, `neighbours`, `free_busy`, or `changes_since`. |
 | entity_type, entity_id, tier | text, nullable | For a read. The title is not stored. The owner's screen shows the title only if the owner's ceiling covers the entity now. |
 | detail | text, nullable | The words of a search, or the start of a walk. At most 200 characters. |
 
@@ -628,6 +629,7 @@ Tools:
 | `list_proposals` | Read proposals. |
 | `proposal_status` | The state of one proposal, and the id of the entity after an approval. The key that filed a proposal can always read its state. |
 | `free_busy` | The times in which the owner is busy between two dates. Only for a key that the owner allows. |
+| `changes_since` | The feed of changed rows, for a key with `memory = 1`. It is in the list only for such a key, and a call from another key is refused with a plain message. See "The feed of changes". |
 | `capture_inbox` | Put raw text in the inbox. |
 | `describe_schema` | The statuses, the kinds with their titles, the relations, and the typed fields of each type and kind. No counts and no rows. |
 | `request_feature` | Tell the owner what the agent needed and did not have: a tool, a field, a type, a kind, or access. It grants nothing. The same need again adds one to its count. |
@@ -640,6 +642,19 @@ There is no `create_entity` tool. A model with a write key that wants to save di
 Tool calls are checked against the key. A denied area fails the tool with a not-found style message, not the entity body.
 
 A view key gets only the tools that read. The four `propose_*` tools, `capture_inbox`, and `request_feature` are not in its list, and a call to one of them is refused.
+
+### The feed of changes
+
+`changes_since` takes `{cursor?: string, limit?: 1..200}` (default 100) and answers `{cursor, more, changes: [{id, type, change, at, entity?}]}`. `change` is `created`, `changed`, or `removed`. `entity` is the row as `get_entity` gives it, through the same projection, ceiling, allow lists, and deny list, and it is absent for `removed`. The changes are oldest first.
+
+- **Source.** The table `entity_versions`. Each edit, move, tier change, delete, and approval writes a version, and the feed reads the versions after the cursor. A change that writes no version is not in the feed. A link change is one of these: read `neighbours` for links.
+- **Cursor.** An opaque string: `c1.` and the place of the last version scanned in the table (its `rowid`, which only grows), as base64url. Send back the cursor of the last answer. A bad cursor is refused with `bad_cursor`. A call with no cursor starts from now: it gives a cursor and no rows, and it does not count against the limit. There is no backfill. The owner can ask the agent to read the graph with `list_entities` once.
+- **One line for each row.** A page holds the newest state of each row that changed, so a row edited three times in a page comes once. A row that this page made new stays `created` if it was edited again in the page.
+- **The rule for `removed`.** A row is `removed` when its newest version is not readable by the key, or the row was deleted, and the version before it was readable. "Readable" means the tier, the area, and the type of that version, checked with the limits that the key has now, and not Sealed. A row that the key could never read is never named, so the feed does not leak ids above the ceiling or outside the allow lists. If a later version, past this page, moved the row out of the key's view, the page says `removed` for it now.
+- **Limits of that rule.** The previous version is judged with the limits of now, not those of the time. After the owner widens a key, a row that left earlier can come as `removed` although the key never held it: the agent forgets an id that it did not have, and the key could read that id in the new view. After the owner narrows a key, a row that left because of the narrowing is not sent as `removed`, because no version changed: the agent must read again. A purge deletes the versions and leaves no `removed` line. A cursor from before a purge of the newest versions is moved back to the newest version.
+- **Daily limit.** At most 2,000 rows (every line of `changes`, `removed` included) in the last 24 hours for each key name, so a rotation keeps the count. Over the limit the answer is `429` with the code `feed_limit`, a plain message, and the instant when the count falls again. The count is the table `feed_log`: `at`, `key_name`, `n`, and a row older than 24 hours is deleted on the next call. A page is cut to what is left of the limit.
+- **Read log.** One `changes_since` row in `client_reads`, then one `read` row for each entity that came back, so the agent page shows one line: "Asked for what changed: 3 rows". The audit log holds the Private reads as for any read.
+- **Switch.** The owner sets `memory` with `POST /api/v1/keys` or `POST /api/v1/keys/:id` (`memory: true` or `false`). `GET /api/v1/keys` and `GET /api/v1/access/:id/scope` give it. Each change of the value writes an audit row, `memory_on` or `memory_off`. The answer is `409` with the code `no_memory` for an outside client, a guest, or a view key.
 
 ## The read format
 

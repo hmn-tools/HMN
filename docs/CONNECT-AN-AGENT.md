@@ -19,13 +19,14 @@ The position behind this is in [STRATEGY.md](STRATEGY.md). An agent that runs aw
 | `list_proposals` | reads | The proposals that this key filed. A key does not read the proposals of another key, of a worker, or of the owner. |
 | `proposal_status` | reads | The state of one proposal, and the entity that an approval wrote. |
 | `free_busy` | reads | The times in which the owner is busy between two dates, as start and end instants with no title. It is in the list only when the owner allows it for the key. |
+| `changes_since` | reads | The rows that changed since a cursor, for an agent that keeps its own memory. It is in the list only when the owner turns that on for the key. See "Keep a copy up to date". |
 | `propose_create`, `propose_update`, `propose_delete`, `propose_link` | proposes | File a proposal. The owner decides. A proposal is at most 32,000 characters. When 100 proposals of the key wait, or the key filed 60 in the last hour, the answer is `429`: wait, and do not retry in a loop. |
 | `capture_inbox` | proposes | Put raw text in the owner's inbox. |
 | `describe_schema` | reads | The types, statuses, kinds, relations, and typed fields. Read it before you propose a row with properties: each typed value is checked on approval. |
 | `request_feature` | proposes | Tell the owner what you needed and did not have: a tool, a field, a type, a kind, or access. It grants nothing. Ask once. At most 10 new requests a day. |
 | `my_requests` | reads | Your requests, and what the owner did with them. |
 
-No tool writes the graph. Each tool has the MCP annotations `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`. A client that can filter tools can keep an agent to the tools that read: `today`, `upcoming`, `week`, `person_page`, `expiring`, `search`, `get_entity`, `list_entities`, `list_links`, `neighbours`, `list_proposals`, `proposal_status`, `describe_schema`, `my_requests`, and `free_busy` when the key has it.
+No tool writes the graph. Each tool has the MCP annotations `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`. A client that can filter tools can keep an agent to the tools that read: `today`, `upcoming`, `week`, `person_page`, `expiring`, `search`, `get_entity`, `list_entities`, `list_links`, `neighbours`, `list_proposals`, `proposal_status`, `describe_schema`, `my_requests`, `free_busy` when the key has it, and `changes_since` when the key keeps its own memory.
 
 Busy times need two switches, and both are off at the start. The owner switches on a calendar in Settings, Calendars, and switches on the key in Settings, Agent keys. The range of one call is at most 60 days.
 
@@ -41,6 +42,10 @@ What the agent cannot do, and no setting in the agent changes it:
 The owner sees a log of what each agent key read: each search with its words, and each entity. It is in Connected agents and apps, and in `GET /api/v1/access/<key id>/reads`.
 
 An agent sends what it reads to its own model. The ceiling of the key is the only control that HMN keeps over where that data goes.
+
+## Keep a copy up to date
+
+An agent that keeps its own memory does not need to search again and again. The owner switches on "Keeps its own memory" for that one key, on the agent page. The tool `changes_since` then appears. Call it with no cursor once: it gives a cursor for now and no rows. After that, send the cursor from the last answer. Each change is `created`, `changed`, or `removed`, oldest first, and a `created` or `changed` change carries the row as `get_entity` gives it. A `removed` change has no row: forget that id. Keep the new cursor only after you saved the page. When `more` is true, call again. The limit is 2,000 rows in 24 hours. Over the limit the answer says when it resets, so wait and do not retry in a loop.
 
 ## The proposal contract
 
