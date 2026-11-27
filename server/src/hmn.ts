@@ -43,7 +43,7 @@ import { ensureExternalTables } from "./external/tables";
 import { readPluginSecret, secretConfigured } from "./plugins/secrets";
 import { readableDue, zoned } from "./time";
 import { ensureRequestTables, fileRequest, listRequests, requestsOfKey, setRequestStatus } from "./requests";
-import { BASE_FIELDS, cleanSpecs, cleanValues, FIELD_TYPES, fieldsFor, kindFieldList } from "./fields";
+import { BASE_FIELDS, cleanSpecs, cleanValues, FIELD_TYPES, fieldsFor, kindFieldList, type FieldSpec } from "./fields";
 import { buildFridge, fridgeWindow, secondsToNextWindow, type FridgeScreen, type FridgeScreenId } from "./fridge";
 import {
   buildAgents,
@@ -3675,7 +3675,20 @@ export class Hmn {
     const kinds = this.kinds();
     const workKinds = kinds.withRole("area", "work");
     const workAreas = new Set([...views.values()].filter((view) => view.type === "area" && view.kind !== null && workKinds.has(view.kind)).map((view) => view.id));
-    return { views, links, now: this.now(), timeZone: this.timeZone, surface: access.surface, ceiling: access.ceiling, roles: roleSets(kinds), workAreas };
+    // An expiry can be a passport. The lock screen, the widget, the display, and a member never get the section.
+    const closed = access.surface === "display" || access.surface === "widget" || access.surface === "lock" || !!access.principal.member;
+    return { views, links, now: this.now(), timeZone: this.timeZone, surface: access.surface, ceiling: access.ceiling, roles: roleSets(kinds), workAreas, ...(closed ? {} : { expiryFields: this.expiryFieldsOf() }) };
+  }
+
+  /** The expiry fields of each type and kind, read once for one screen. */
+  private expiryFieldsOf(): (type: string, kind: string | null) => Array<{ key: string; label: string }> {
+    const expiry = (specs: FieldSpec[]) => specs.filter((spec) => spec.type === "expiry").map((spec) => ({ key: spec.key, label: spec.label }));
+    const byKind = new Map(kindFieldList(this.store.db).map((item) => [`${item.type}:${item.kind}`, expiry(item.fields)]));
+    return (type, kind) => {
+      const base = expiry(BASE_FIELDS[type] ?? []);
+      const extra = kind ? byKind.get(`${type}:${kind}`) ?? [] : [];
+      return extra.length ? base.concat(extra) : base;
+    };
   }
 
   private visible(access: Access): EntityView[] {

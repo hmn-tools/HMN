@@ -1015,6 +1015,8 @@ A type has a few fields of its own: a person's birthday, an asset's make and mod
 
 The server checks each value that a write changes, on every path: the owner's write, a member's write, and an approved proposal. A bad value is `422 bad_field` with the field's name and an example. An empty string removes the value. A value that the write does not change is not checked again, so a value from before the checks never blocks a save. A key that has no field is kept as it is.
 
+A field of the type `expiry` also feeds the screens. The server reads the expiry fields of each type and kind (the type's own, then the kind's, including fields the owner made) and passes them to the screens, which never read the database. Today shows each value from 30 days ago to 30 days ahead in a section `renewals`, "Expiring soon", at most four. Upcoming shows the next 60 days, at most eight. The weekly review shows the past 30 days and the next 7. Dates use the owner's zone. A row the caller cannot read is not shown, and a value that is not a real day is skipped. The lock screen, the widget, the display, the fridge, and a member's Home never get the section.
+
 A new graph has default fields for the kinds `document` (a new asset kind), `car`, `organisation`, `decision`, `fact`, `school`, and `garage`. They are in `server/src/kinds.ts`. The owner changes the list of a kind in Settings > Areas and kinds > Fields, or with `PUT /api/v1/kinds/:type/:kind/fields`. The table `kind_fields` holds one list for each kind.
 
 ## Requests from agents

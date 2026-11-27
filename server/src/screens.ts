@@ -1,4 +1,4 @@
-import { calendarDays, daysLate, dueDateKey, eventOver, greetingWord, hasClock, keyDays, plusHour, zoned } from "./time";
+import { calendarDays, daysLate, dueDateKey, eventOver, greetingWord, hasClock, keyDays, plusHour, readableDue, zoned } from "./time";
 import { dueOn, routineDays, routinePeople } from "./routines";
 import type { EntityView, LinkView, Surface, Tier } from "./types";
 import { LEGACY_ROLES, type RoleSets } from "./kinds";
@@ -185,6 +185,9 @@ function assemble(
       })),
     });
   }
+  // Something that is about to end needs a decision, as a late task does. It comes before the family dates.
+  const renewals = renewalSection(renewalsIn(input, RENEWAL_PAST_DAYS, RENEWAL_AHEAD_DAYS), TODAY_ROWS_MAX);
+  if (renewals) sections.push(renewals);
   if (family.length) {
     sections.push({
       id: "family",
@@ -360,7 +363,68 @@ export type ScreenInput = {
   roles?: RoleSets;
   /** The ids of the areas whose kind has the role `work`. */
   workAreas?: Set<string>;
+  /**
+   * The expiry fields of a type and a kind: the keys in `properties` that hold a day on which something ends.
+   * Absent on the surfaces and for the members that must not see them (the lock screen, the widget, the display).
+   * A screen never reads the database, so the server passes this in.
+   */
+  expiryFields?: (type: string, kind: string | null) => Array<{ key: string; label: string }>;
 };
+
+/** Today shows an expiry from this many days ago to this many days ahead. */
+const RENEWAL_PAST_DAYS = 30;
+const RENEWAL_AHEAD_DAYS = 30;
+/** Upcoming looks further ahead, and never back. */
+const UPCOMING_RENEWAL_DAYS = 60;
+/** The weekly review looks one week ahead. */
+const WEEK_RENEWAL_DAYS = 7;
+
+type Renewal = { entity: EntityView; label: string; key: string; days: number };
+
+/**
+ * Each expiry value of the rows in `views` that falls from `back` days ago to `ahead` days ahead, in the owner's
+ * zone, soonest first. A row with two expiry fields gives two. A value that HMN cannot read is skipped.
+ */
+function renewalsIn(input: ScreenInput, back: number, ahead: number): Renewal[] {
+  const fieldsOf = input.expiryFields;
+  if (!fieldsOf) return [];
+  const today = zoned(input.now, input.timeZone).dateKey;
+  const out: Renewal[] = [];
+  for (const entity of input.views.values()) {
+    for (const field of fieldsOf(entity.type, entity.kind)) {
+      const value = entity.properties?.[field.key];
+      if (!readableDue(value)) continue;
+      const key = dueDateKey(value, input.timeZone);
+      const days = keyDays(today, key);
+      if (days < -back || days > ahead) continue;
+      out.push({ entity, label: field.label, key, days });
+    }
+  }
+  return out.sort((a, b) => a.key.localeCompare(b.key) || a.entity.title.localeCompare(b.entity.title) || a.label.localeCompare(b.label));
+}
+
+function endsPhrase(days: number): string {
+  if (days === 0) return "ends today";
+  if (days === 1) return "ends tomorrow";
+  if (days > 1) return `ends in ${days} days`;
+  if (days === -1) return "ended yesterday";
+  return `ended ${-days} days ago`;
+}
+
+function renewalItem(renewal: Renewal): ScreenItem {
+  return { id: renewal.entity.id, title: renewal.entity.title, subtitle: `${renewal.label} · ${endsPhrase(renewal.days)}`, glyph: "flag", done: false };
+}
+
+function renewalSection(list: Renewal[], max: number | null): ScreenSection | null {
+  if (!list.length) return null;
+  const shown = max === null ? list : list.slice(0, max);
+  return {
+    id: "renewals",
+    label: "Expiring soon",
+    ...(max !== null && list.length > max ? { trailing: `${max} of ${list.length}` } : {}),
+    items: shown.map(renewalItem),
+  };
+}
 
 /** A task that the screens show. An item of a list, or a step of a task, shows only on its list or its task. */
 export function isTaskRow(entity: EntityView): boolean {
@@ -480,6 +544,9 @@ export function buildUpcoming(input: ScreenInput): TodayScreen {
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   const sections: ScreenSection[] = [];
   const capped = (list: EntityView[], max: number) => (list.length > max ? { trailing: `${max} of ${list.length}` } : {});
+  const renewalList = renewalsIn(input, 0, UPCOMING_RENEWAL_DAYS);
+  const renewals = renewalSection(renewalList, UPCOMING_ROWS_MAX);
+  if (renewals) sections.push(renewals);
   if (family.length) {
     sections.push({ id: "family", label: "Family", ...capped(family, UPCOMING_ROWS_MAX), items: family.slice(0, UPCOMING_ROWS_MAX).map((event) => eventItem(event, links, timeZone, false)) });
   }
@@ -491,7 +558,7 @@ export function buildUpcoming(input: ScreenInput): TodayScreen {
       items: fixtures.slice(0, UPCOMING_ROWS_MAX).map((event) => eventItem(event, links, timeZone, true)),
     });
   }
-  const count = family.length + fixtures.length;
+  const count = family.length + fixtures.length + renewalList.length;
   return frame(input, {
     id: "upcoming",
     label: "upcoming",
@@ -605,6 +672,8 @@ export function buildWeek(input: ScreenInput): TodayScreen {
       }),
     });
   }
+  const renewals = renewalSection(renewalsIn(input, RENEWAL_PAST_DAYS, WEEK_RENEWAL_DAYS), null);
+  if (renewals) sections.push(renewals);
   const nextRows = [...upcomingTasks, ...dates].sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   const nextItems = nextRows.map((entity) =>
     entity.type === "event"
