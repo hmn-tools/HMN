@@ -18,7 +18,7 @@ HMN is a store. It is not an agent runtime, and it has no chat. Use it with the 
 Read this before you put real data in. The dates are from 2026-11-19.
 
 - HMN is not released. One person builds it for personal use, and the repository is being prepared for a public release.
-- The server has 236 tests. CI runs them on Linux and on macOS, and CI makes a real install on a macOS runner.
+- The server has 254 tests. CI runs them on Linux and on macOS, and CI makes a real install on a macOS runner.
 - The iPhone app and the menu bar app compile in CI. The iPhone app was run in the simulator, not on a real iPhone.
 - No second person has reviewed the security design. Do not rely on the encryption until that review is done. [docs/SECURITY.md](docs/SECURITY.md) lists what is enforced and what risks remain.
 - There is no App Store build. You build the iPhone app from the source.
