@@ -6,7 +6,7 @@ const TIER_TAGS = new Set(["public", "household", "personal", "private", "sealed
 export type InboxTag = string;
 
 export type InboxSuggestion = {
-  route: "task" | "person" | "reading" | "file";
+  route: "task" | "person" | "reading" | "note" | "file";
   label: string;
   entity_type?: string;
   entity_id?: string;

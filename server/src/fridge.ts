@@ -7,7 +7,7 @@
 import { GLYPH_H, GLYPH_W, GLYPHS } from "./glyphs";
 import type { EntityView } from "./policy";
 import { isTaskRow, type ScreenInput, type SourcedLink } from "./screens";
-import { dueDateKey, hasClock, zoned } from "./time";
+import { dueDateKey, eventOver, hasClock, zoned } from "./time";
 import { BWRY_INKS, encodeBmp1, encodePngIndexed, OG } from "./devices/image";
 import { encodeQr } from "./qr";
 import { dueOn, routineDays, routinePeople } from "./routines";
@@ -64,11 +64,12 @@ export function buildFridge(input: ScreenInput, id: FridgeScreenId): FridgeScree
   const nowMs = now.getTime();
   const fixtureKinds = input.roles?.fixtureEvent ?? new Set<string>();
   const all = [...views.values()];
+  // An event that is over is not on the fridge: a game that started this afternoon is gone when it ends.
   const events = all
-    .filter((item) => item.type === "event" && item.status !== "cancelled" && item.due_at)
+    .filter((item) => item.type === "event" && !eventOver(item, now, timeZone, fixtureKinds.has(item.kind ?? "")))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   const tasks = all
-    .filter((item) => isTaskRow(item) && (item.status === "open" || item.status === "inbox") && item.due_at)
+    .filter((item) => isTaskRow(item) && item.status === "open" && item.due_at)
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   const on = (item: EntityView, key: string) => dueDateKey(item.due_at!, timeZone) === key;
   const used: string[] = [];
@@ -111,6 +112,9 @@ export function buildFridge(input: ScreenInput, id: FridgeScreenId): FridgeScree
   } else if (id === "evening") {
     const tonight = events.filter((item) => on(item, today) && hasClock(item.due_at!) && Date.parse(item.due_at!) >= nowMs);
     if (tonight.length) sections.push({ label: "Tonight", rows: tonight.map((item) => row(item, "black")) });
+    // A task due today that is not done yet is red in the evening, so it is not missed.
+    const undone = tasks.filter((item) => on(item, today));
+    if (undone.length) sections.push({ label: "Still to do today", rows: undone.map((item) => row(item, "red", "")) });
     // An early start tomorrow is red, so it is seen the evening before.
     const early = (item: EntityView) => hasClock(item.due_at!) && zoned(new Date(item.due_at!), timeZone).hour < 9;
     const next = [...events.filter((item) => on(item, tomorrow)), ...tasks.filter((item) => on(item, tomorrow))].sort((a, b) =>
@@ -125,15 +129,17 @@ export function buildFridge(input: ScreenInput, id: FridgeScreenId): FridgeScree
       tail.push({ label: list.list.title, rows: [{ time: "", text: list.items.map((item) => item.title).join(", "), ink: "yellow" }] });
     }
   } else {
-    const first = events.find((item) => on(item, tomorrow));
-    sections.push({ label: "Tomorrow", rows: first ? [row(first, "black")] : [] });
+    // After midnight the coming day is today, so a 06:30 flight shows at 02:00.
+    const key = zone.hour < 6 ? today : tomorrow;
+    const first = events.find((item) => on(item, key));
+    sections.push({ label: zone.hour < 6 ? "Today" : "Tomorrow", rows: first ? [row(first, "black")] : [] });
   }
 
   return {
     id,
     title: TITLES[id],
     date_label,
-    sections: [...fit(sections, ROWS_MAX - tail.reduce((sum, section) => sum + section.rows.length, 0)), ...tail],
+    sections: [...fit(sections, ROWS_MAX - trimTail(tail)), ...tail],
     entity_ids: [...new Set(used)],
   };
 }
@@ -152,7 +158,26 @@ const EMPTY: Record<string, string> = {
   Tomorrow: "Nothing early. Sleep in.",
 };
 
-/** Keep the panel to its rows. The first section keeps its rows first. */
+/** The rows that the dates and tasks of a screen keep, whatever the routines and the list take. */
+const MAIN_ROWS_MIN = 3;
+
+/**
+ * The routines and the list keep their place at the end, but they do not push today's dates and tasks off the panel.
+ * When they would leave fewer than MAIN_ROWS_MIN rows, the routines give up rows first. Returns the rows they keep.
+ */
+function trimTail(tail: FridgeSection[]): number {
+  const count = () => tail.reduce((sum, section) => sum + section.rows.length, 0);
+  const routines = tail.find((section) => section.label === "Routines");
+  while (routines && ROWS_MAX - count() < MAIN_ROWS_MIN && routines.rows.length > 1) {
+    const cut = routines.rows.pop()!;
+    const last = routines.rows[routines.rows.length - 1]!;
+    // The names of the children who lost a row stay on the last row, so no child is left out.
+    last.text = `${last.text} · ${cut.text}`;
+  }
+  return count();
+}
+
+/** Keep the panel to its rows. The first section keeps its rows first. A section that is cut says how many more. */
 function fit(sections: FridgeSection[], rows = ROWS_MAX): FridgeSection[] {
   let left = rows;
   const out: FridgeSection[] = [];
@@ -161,6 +186,12 @@ function fit(sections: FridgeSection[], rows = ROWS_MAX): FridgeSection[] {
     if (section.rows.length === 0) {
       out.push({ label: section.label, rows: [{ time: "", text: EMPTY[section.label] ?? "Nothing here.", ink: "black" }] });
       left -= 1;
+      continue;
+    }
+    if (section.rows.length > left && left >= 2) {
+      const kept = section.rows.slice(0, left - 1);
+      out.push({ label: section.label, rows: [...kept, { time: "", text: `+${section.rows.length - kept.length} more`, ink: "black" }] });
+      left = 0;
       continue;
     }
     const rows = section.rows.slice(0, left);

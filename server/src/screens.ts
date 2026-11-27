@@ -1,4 +1,4 @@
-import { calendarDays, dueDateKey, greetingWord, hasClock, plusHour, zoned } from "./time";
+import { calendarDays, daysLate, dueDateKey, eventOver, greetingWord, hasClock, plusHour, zoned } from "./time";
 import { dueOn, routineDays, routinePeople } from "./routines";
 import type { EntityView, LinkView, Surface, Tier } from "./types";
 import { LEGACY_ROLES, type RoleSets } from "./kinds";
@@ -6,6 +6,8 @@ import { LEGACY_ROLES, type RoleSets } from "./kinds";
 
 /** Today shows at most this many fixtures. */
 const TODAY_FIXTURES = 3;
+/** At most this many rows in the Overdue and Family sections of Today. The trailing count says how many there are. */
+const TODAY_ROWS_MAX = 4;
 /** A fixture is on Today when it starts within this many hours. */
 const TODAY_FIXTURE_HOURS = 36;
 export const DECK = [
@@ -78,11 +80,12 @@ function capital(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-export function summaryLine(due: number, family: number, quiet: number, surface: Surface, calendar = 0): string {
-  if (surface === "display" && due === 0) return "Nothing public is due.";
-  if (due + family + quiet + calendar === 0) return "The day is clear.";
+export function summaryLine(due: number, family: number, quiet: number, surface: Surface, calendar = 0, overdue = 0): string {
+  if (surface === "display" && due + overdue === 0) return "Nothing public is due.";
+  if (due + family + quiet + calendar + overdue === 0) return "The day is clear.";
   const parts: string[] = [];
-  parts.push(due ? countPhrase(due, "thing due", "things due") : "nothing due");
+  if (overdue) parts.push(countPhrase(overdue, "thing overdue", "things overdue"));
+  if (due || !overdue) parts.push(due ? countPhrase(due, "thing due", "things due") : "nothing due");
   if (calendar) parts.push(countPhrase(calendar, "event on the calendar", "events on the calendar"));
   if (family) parts.push(countPhrase(family, "family date", "family dates"));
   if (quiet) parts.push(countPhrase(quiet, "thing that has gone quiet", "things that have gone quiet"));
@@ -122,6 +125,10 @@ function assemble(
   const { views, links, now, timeZone, surface, ceiling } = input;
   const roles = input.roles ?? LEGACY_ROLES;
   const tasks = [...views.values()].filter((entity) => isTaskRow(entity) && entity.status === "open");
+  // A task whose day has passed is overdue. It stays on Today, first, until it is done or has a new date.
+  const overdue = tasks
+    .filter((task) => task.due_at && dueDateKey(task.due_at, timeZone) < zone.dateKey)
+    .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   const due = tasks
     .filter((task) => task.due_at && dueDateKey(task.due_at, timeZone) === zone.dateKey)
     .sort((a, b) => {
@@ -132,27 +139,38 @@ function assemble(
   const quiet = tasks
     .filter((task) => !task.due_at && calendarDays(task.updated_at, now, timeZone) >= 14)
     .sort((a, b) => a.updated_at.localeCompare(b.updated_at));
+  // An event leaves a screen when it is over: a game that started this afternoon is gone when it ends.
   const family = [...views.values()]
-    .filter((entity) => entity.type === "event" && isKind(entity, roles.familyEvent) && entity.status !== "cancelled")
-    .filter((entity) => entity.due_at && dueDateKey(entity.due_at, timeZone) >= zone.dateKey)
-    // A mirrored calendar can hold a family date for each week. Only the next seven days are shown.
-    .filter((entity) => entity.properties.mirror !== true || withinDays(entity.due_at!, now, timeZone, 7))
+    .filter((entity) => entity.type === "event" && isKind(entity, roles.familyEvent) && !eventOver(entity, now, timeZone))
+    // The next seven days. A date further out is on Upcoming.
+    .filter((entity) => withinDays(entity.due_at!, now, timeZone, 7))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
-  // Today's events from a mirrored calendar. An event on another day is not on Today.
+  // Today's events from a mirrored calendar that are not over, with an event of several days that covers today.
   const calendar = [...views.values()]
-    .filter((entity) => entity.type === "event" && entity.properties.mirror === true && !isKind(entity, roles.familyEvent) && entity.status !== "cancelled")
-    .filter((entity) => entity.due_at && dueDateKey(entity.due_at, timeZone) === zone.dateKey)
-    .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
-  // The next fixtures, for the lock screen and the next event.
+    .filter((entity) => entity.type === "event" && entity.properties.mirror === true && !isKind(entity, roles.familyEvent) && !isKind(entity, roles.fixtureEvent))
+    .filter((entity) => !eventOver(entity, now, timeZone) && dueDateKey(entity.due_at!, timeZone) <= zone.dateKey)
+    // An all-day event that is free time goes after the rest of the day.
+    .sort((a, b) => Number(a.properties.busy === false) - Number(b.properties.busy === false) || String(a.due_at).localeCompare(String(b.due_at)));
+  // The next fixtures that are not over, for To watch and the next event.
   const fixtures = [...views.values()]
-    .filter((entity) => entity.type === "event" && isKind(entity, roles.fixtureEvent) && entity.status !== "cancelled")
-    .filter((entity) => entity.due_at && dueDateKey(entity.due_at, timeZone) >= zone.dateKey)
+    .filter((entity) => entity.type === "event" && isKind(entity, roles.fixtureEvent) && !eventOver(entity, now, timeZone, true))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   // Today is about today. Its section shows a fixture that starts in the next TODAY_FIXTURE_HOURS (tonight, or early
   // tomorrow in another time zone), at most TODAY_FIXTURES. The Upcoming screen has the rest of the week.
   const watchToday = fixtures.filter((entity) => Date.parse(entity.due_at!) - now.getTime() <= TODAY_FIXTURE_HOURS * 3_600_000);
 
   const sections: ScreenSection[] = [];
+  if (overdue.length) {
+    sections.push({
+      id: "overdue",
+      label: "Overdue",
+      trailing: String(overdue.length),
+      items: overdue.slice(0, TODAY_ROWS_MAX).map((task) => {
+        const late = daysLate(task.due_at!, now, timeZone);
+        return { id: task.id, title: task.title, subtitle: late === 1 ? "1 day late" : `${late} days late`, glyph: "checkbox" as const, done: false };
+      }),
+    });
+  }
   if (due.length) {
     sections.push({
       id: "due",
@@ -171,7 +189,8 @@ function assemble(
     sections.push({
       id: "family",
       label: "Family",
-      items: family.map((event) => {
+      ...(family.length > TODAY_ROWS_MAX ? { trailing: `${TODAY_ROWS_MAX} of ${family.length}` } : {}),
+      items: family.slice(0, TODAY_ROWS_MAX).map((event) => {
         const person = peerNamed(links, event.id, ["with"], ["person"]);
         const title = person && !event.title.includes(person) ? `${person} · ${event.title}` : event.title;
         const when = event.due_at ? weekdayDate(event.due_at, timeZone) : "";
@@ -194,10 +213,11 @@ function assemble(
       label: "On the calendar",
       items: calendar.map((event) => {
         const clock = event.due_at ? clockOf(event.due_at, timeZone) : null;
+        const started = dueDateKey(event.due_at!, timeZone) < zone.dateKey;
         return {
           id: event.id,
           title: event.title,
-          subtitle: clock ?? "All day",
+          subtitle: started ? `Since ${weekdayDate(event.due_at!, timeZone)}` : clock ?? "All day",
           glyph: "date" as const,
           done: false,
           date_mark: String(Number(zone.dateKey.slice(8, 10))),
@@ -213,9 +233,8 @@ function assemble(
       items: watchToday.slice(0, TODAY_FIXTURES).map((event) => {
         const when = event.due_at ? weekdayDate(event.due_at, timeZone) : "";
         const clock = event.due_at ? clockOf(event.due_at, timeZone) : null;
-        const tz = typeof event.properties.tz_label === "string" ? event.properties.tz_label : "";
         const badge = typeof event.properties.badge === "string" ? event.properties.badge : undefined;
-        const time = [clock, tz].filter(Boolean).join(" ");
+        const time = clock ?? "";
         return {
           id: event.id,
           title: event.title,
@@ -228,7 +247,9 @@ function assemble(
     });
   }
   // A routine for a child is the household's. The owner's Today shows the owner's own habits only.
-  const habits = [...views.values()].filter((entity) => entity.type === "habit" && entity.status !== "paused" && routinePeople(entity.id, links).length === 0);
+  const habits = [...views.values()].filter(
+    (entity) => entity.type === "habit" && entity.status !== "paused" && routinePeople(entity.id, links).length === 0 && dueOn(routineDays(entity.properties.days), zone.weekday),
+  );
   if (habits.length) {
     sections.push({
       id: "routines",
@@ -262,7 +283,9 @@ function assemble(
   const self = [...views.values()].find((entity) => entity.type === "person" && isKind(entity, roles.selfPerson));
   const hello = greetingWord(zone.hour);
   const greeting = self ? `${hello}, ${self.title}.` : `${hello}.`;
-  const nextEvent = family[0] ?? fixtures[0] ?? null;
+  // The next event: the first one that has not started, else one that is on now.
+  const upcomingEvents = [...family, ...calendar, ...fixtures].sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
+  const nextEvent = upcomingEvents.find((event) => !hasClock(event.due_at!) ? dueDateKey(event.due_at!, timeZone) > zone.dateKey : Date.parse(event.due_at!) >= now.getTime()) ?? upcomingEvents[0] ?? null;
   let next: TodayScreen["next"] = null;
   if (nextEvent) {
     const short = typeof nextEvent.properties.short_title === "string" ? nextEvent.properties.short_title : nextEvent.title;
@@ -287,30 +310,43 @@ function assemble(
     date_label: `${zone.weekday.toUpperCase()} ${Number(zone.day)}/${zone.month}/${zone.year}`,
     clock_label: zone.hm,
     greeting,
-    summary: summaryLine(due.length, family.length, quiet.length, surface, calendar.length),
+    summary: summaryLine(due.length, family.length, quiet.length, surface, calendar.length, overdue.length),
     updated_label: zone.hm,
     next_label: plusHour(zone.hm),
     refresh_seconds: 3600,
     surface,
     ceiling,
-    due_count: due.length,
+    due_count: due.length + overdue.length,
     next,
     sections,
     entity_ids: ids,
   };
 }
 
-function taskSubtitle(task: EntityView, links: SourcedLink[], timeZone: string): string {
+/**
+ * The second line of a task: its project or person, and when. With `now`, a task on another day names the day,
+ * and a task whose day has passed says how late it is, so "by 17:00" never hides the date.
+ */
+function taskSubtitle(task: EntityView, links: SourcedLink[], timeZone: string, now?: Date): string {
   const name =
     peerNamed(links, task.id, ["part_of"], ["project"]) ??
+    peerNamed(links, task.id, ["for"], ["person"]) ??
     peerNamed(links, task.id, ["about"], ["person"]) ??
     peerNamed(links, task.id, ["about"], ["asset"]) ??
     peerNamed(links, task.id, ["about"], ["note"]);
   const clock = task.due_at ? clockOf(task.due_at, timeZone) : null;
-  if (name && clock) return `${name} · by ${clock}`;
-  if (name) return name;
-  if (clock) return `by ${clock}`;
-  return "";
+  let when = clock ? `by ${clock}` : "";
+  if (now && task.due_at) {
+    const key = dueDateKey(task.due_at, timeZone);
+    const today = zoned(now, timeZone).dateKey;
+    if (key < today) {
+      const late = daysLate(task.due_at, now, timeZone);
+      when = late === 1 ? "1 day late" : `${late} days late`;
+    } else if (key > today) {
+      when = [weekdayDate(task.due_at, timeZone), clock ? `by ${clock}` : null].filter(Boolean).join(" · ");
+    }
+  }
+  return [name, when].filter(Boolean).join(" · ");
 }
 
 export type ScreenInput = {
@@ -393,9 +429,9 @@ function eventItem(event: EntityView, links: SourcedLink[], timeZone: string, fi
   const when = event.due_at ? weekdayDate(event.due_at, timeZone) : "";
   const clock = event.due_at ? clockOf(event.due_at, timeZone) : null;
   if (fixture) {
-    const tz = typeof event.properties.tz_label === "string" ? event.properties.tz_label : "";
+    // The clock is already in the owner's zone, so a stored zone label (from the fixture file) would be wrong abroad.
     const badge = typeof event.properties.badge === "string" ? event.properties.badge : undefined;
-    const time = [clock, tz].filter(Boolean).join(" ");
+    const time = clock ?? "";
     return {
       id: event.id,
       title: event.title,
@@ -427,19 +463,25 @@ export function buildUpcoming(input: ScreenInput): TodayScreen {
   const { views, links, now, timeZone } = input;
   const roles = input.roles ?? LEGACY_ROLES;
   const today = zoned(now, timeZone).dateKey;
+  void today;
+  // The next two weeks. An event that is over, or cancelled, is not coming.
   const family = [...views.values()]
-    .filter((entity) => entity.type === "event" && isKind(entity, roles.familyEvent) && entity.due_at && dueDateKey(entity.due_at, timeZone) >= today)
+    .filter((entity) => entity.type === "event" && isKind(entity, roles.familyEvent) && !eventOver(entity, now, timeZone) && withinDays(entity.due_at!, now, timeZone, UPCOMING_DAYS))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   const fixtures = [...views.values()]
-    .filter((entity) => entity.type === "event" && isKind(entity, roles.fixtureEvent) && entity.due_at && dueDateKey(entity.due_at, timeZone) >= today)
+    .filter((entity) => entity.type === "event" && isKind(entity, roles.fixtureEvent) && !eventOver(entity, now, timeZone, true) && withinDays(entity.due_at!, now, timeZone, UPCOMING_DAYS))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   const sections: ScreenSection[] = [];
-  if (family.length) sections.push({ id: "family", label: "Family", items: family.map((event) => eventItem(event, links, timeZone, false)) });
+  const capped = (list: EntityView[], max: number) => (list.length > max ? { trailing: `${max} of ${list.length}` } : {});
+  if (family.length) {
+    sections.push({ id: "family", label: "Family", ...capped(family, UPCOMING_ROWS_MAX), items: family.slice(0, UPCOMING_ROWS_MAX).map((event) => eventItem(event, links, timeZone, false)) });
+  }
   if (fixtures.length) {
     sections.push({
       id: "watch",
       label: "To watch",
-      items: fixtures.map((event) => eventItem(event, links, timeZone, true)),
+      ...capped(fixtures, UPCOMING_ROWS_MAX),
+      items: fixtures.slice(0, UPCOMING_ROWS_MAX).map((event) => eventItem(event, links, timeZone, true)),
     });
   }
   const count = family.length + fixtures.length;
@@ -453,6 +495,10 @@ export function buildUpcoming(input: ScreenInput): TodayScreen {
     sections,
   });
 }
+
+/** Upcoming covers the next two weeks, with at most this many rows in a section. */
+const UPCOMING_DAYS = 14;
+const UPCOMING_ROWS_MAX = 8;
 
 /** The Week screen shows at most this many mirrored events. */
 const WEEK_CALENDAR_MAX = 12;
@@ -472,7 +518,7 @@ export function buildCommitments(input: ScreenInput): TodayScreen {
     .filter((entity) => isTaskRow(entity) && entity.status === "open" && entity.area_id && areas.has(entity.area_id))
     .sort((a, b) => String(a.due_at ?? "9999").localeCompare(String(b.due_at ?? "9999")));
   const sections: ScreenSection[] = tasks.length
-    ? [{ id: "commitments", label: named, trailing: String(tasks.length), items: tasks.map((task) => ({ id: task.id, title: task.title, subtitle: taskSubtitle(task, input.links, input.timeZone), glyph: "checkbox" as const, done: false })) }]
+    ? [{ id: "commitments", label: named, trailing: String(tasks.length), items: tasks.map((task) => ({ id: task.id, title: task.title, subtitle: taskSubtitle(task, input.links, input.timeZone, input.now), glyph: "checkbox" as const, done: false })) }]
     : [];
   return frame(input, {
     id: "commitments",
@@ -513,27 +559,52 @@ export function buildWeek(input: ScreenInput): TodayScreen {
   const { views, links, now, timeZone } = input;
   const roles = input.roles ?? LEGACY_ROLES;
   const today = zoned(now, timeZone).dateKey;
-  const done = [...views.values()].filter((entity) => isTaskRow(entity) && entity.status === "done" && calendarDays(entity.updated_at, now, timeZone) <= 7 && calendarDays(entity.updated_at, now, timeZone) >= 0);
-  const slipped = [...views.values()].filter((entity) => isTaskRow(entity) && entity.status === "open" && entity.due_at && dueDateKey(entity.due_at, timeZone) < today);
-  const upcomingTasks = [...views.values()].filter((entity) => isTaskRow(entity) && entity.status === "open" && entity.due_at && withinDays(entity.due_at, now, timeZone, 7) && dueDateKey(entity.due_at, timeZone) > today);
-  const dates = [...views.values()].filter((entity) => entity.type === "event" && (isKind(entity, roles.familyEvent) || isKind(entity, roles.fixtureEvent)) && entity.due_at && withinDays(entity.due_at, now, timeZone, 7));
+  // Done in the last seven days, by the time it was done. A later edit of a done task does not bring it back.
+  const doneAt = (task: EntityView) => (typeof task.properties.done_at === "string" ? task.properties.done_at : task.updated_at);
+  const done = [...views.values()]
+    .filter((entity) => isTaskRow(entity) && entity.status === "done" && calendarDays(doneAt(entity), now, timeZone) <= 7 && calendarDays(doneAt(entity), now, timeZone) >= 0)
+    .sort((a, b) => doneAt(b).localeCompare(doneAt(a)));
+  const slipped = [...views.values()]
+    .filter((entity) => isTaskRow(entity) && entity.status === "open" && entity.due_at && dueDateKey(entity.due_at, timeZone) < today)
+    .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
+  // Today and the next seven days, in one list in time order: tasks, family dates, and fixtures that are not over.
+  const upcomingTasks = [...views.values()].filter((entity) => isTaskRow(entity) && entity.status === "open" && entity.due_at && dueDateKey(entity.due_at, timeZone) >= today && withinDays(entity.due_at, now, timeZone, 7));
+  const dates = [...views.values()].filter(
+    (entity) =>
+      entity.type === "event" &&
+      (isKind(entity, roles.familyEvent) || isKind(entity, roles.fixtureEvent)) &&
+      !eventOver(entity, now, timeZone, isKind(entity, roles.fixtureEvent)) &&
+      withinDays(entity.due_at!, now, timeZone, 7),
+  );
   // The mirrored events of the next seven days. A family date and a fixture are in `dates`.
   const calendar = [...views.values()]
-    .filter((entity) => entity.type === "event" && entity.properties.mirror === true && entity.status !== "cancelled")
+    .filter((entity) => entity.type === "event" && entity.properties.mirror === true && !eventOver(entity, now, timeZone))
     .filter((entity) => !isKind(entity, roles.familyEvent) && !isKind(entity, roles.fixtureEvent))
-    .filter((entity) => entity.due_at && withinDays(entity.due_at, now, timeZone, 7))
+    .filter((entity) => withinDays(entity.due_at!, now, timeZone, 7))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   const quiet = [...views.values()].filter((entity) => isTaskRow(entity) && entity.status === "open" && !entity.due_at && calendarDays(entity.updated_at, now, timeZone) >= 14);
   const goals = [...views.values()].filter((entity) => entity.type === "goal" && entity.status === "active");
   const moved = new Set(done.map((task) => peerNamed(links, task.id, ["part_of"], ["project"])).filter(Boolean));
   const sections: ScreenSection[] = [];
-  if (goals.length) sections.push({ id: "goals", label: "Goals", items: goals.map((goal) => ({ id: goal.id, title: goal.title, subtitle: goal.status ?? "", glyph: "checkbox" as const, done: false })) });
-  if (done.length) sections.push({ id: "done", label: "Done", items: done.map((task) => ({ id: task.id, title: task.title, subtitle: "Done this week", glyph: "checkbox" as const, done: true })) });
-  const nextItems = [
-    ...upcomingTasks.map((task) => ({ id: task.id, title: task.title, subtitle: taskSubtitle(task, links, timeZone), glyph: "checkbox" as const, done: false })),
-    ...dates.map((event) => eventItem(event, links, timeZone, isKind(event, roles.fixtureEvent))),
-  ];
-  if (nextItems.length) sections.push({ id: "next", label: "Next week", items: nextItems });
+  // What needs a decision comes first: what slipped, then the week ahead. What was done and the goals come after.
+  if (slipped.length) {
+    sections.push({
+      id: "slipped",
+      label: "Slipped",
+      trailing: String(slipped.length),
+      items: slipped.map((task) => {
+        const late = daysLate(task.due_at!, now, timeZone);
+        return { id: task.id, title: task.title, subtitle: late === 1 ? "1 day late" : `${late} days late`, glyph: "checkbox" as const, done: false };
+      }),
+    });
+  }
+  const nextRows = [...upcomingTasks, ...dates].sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
+  const nextItems = nextRows.map((entity) =>
+    entity.type === "event"
+      ? eventItem(entity, links, timeZone, isKind(entity, roles.fixtureEvent))
+      : { id: entity.id, title: entity.title, subtitle: taskSubtitle(entity, links, timeZone, now) || "Today", glyph: "checkbox" as const, done: false },
+  );
+  if (nextItems.length) sections.push({ id: "next", label: "Next 7 days", items: nextItems });
   if (calendar.length) {
     // A full calendar does not fill the review. The count says how many there are.
     const shown = calendar.slice(0, WEEK_CALENDAR_MAX);
@@ -544,7 +615,15 @@ export function buildWeek(input: ScreenInput): TodayScreen {
       items: shown.map((event) => eventItem(event, links, timeZone, false)),
     });
   }
-  if (slipped.length) sections.push({ id: "slipped", label: "Slipped", items: slipped.map((task) => ({ id: task.id, title: task.title, subtitle: "Due before today", glyph: "checkbox" as const, done: false })) });
+  if (done.length) {
+    sections.push({
+      id: "done",
+      label: "Done",
+      trailing: String(done.length),
+      items: done.map((task) => ({ id: task.id, title: task.title, subtitle: `Done ${weekdayDate(doneAt(task), timeZone)}`, glyph: "checkbox" as const, done: true })),
+    });
+  }
+  if (goals.length) sections.push({ id: "goals", label: "Goals", items: goals.map((goal) => ({ id: goal.id, title: goal.title, subtitle: capital(goal.status ?? ""), glyph: "checkbox" as const, done: false })) });
   if (quiet.length) sections.push({ id: "quiet", label: "Quiet", accent: "teal", items: quiet.map((task) => ({ id: task.id, title: task.title, subtitle: "No date", glyph: "dashed" as const, done: false, accent: "teal" as const })) });
   const doneText = done.length === 0 ? "nothing done" : countPhrase(done.length, "thing done", "things done");
   const slippedText = slipped.length === 0 ? "nothing slipped" : countPhrase(slipped.length, "thing slipped", "things slipped");
@@ -645,15 +724,17 @@ export function buildHome(input: ScreenInput, member: { personId: string | null;
   const open = all.filter((entity) => isTaskRow(entity) && entity.status === "open");
   const mine = open.filter(isFor).sort(byDue);
   const dueToday = open.filter((task) => !isFor(task) && task.due_at && dueDateKey(task.due_at, timeZone) <= today).sort(byDue);
+  // An event that is over leaves Home, as it leaves Today.
   const events = all
-    .filter((entity) => entity.type === "event" && entity.status !== "cancelled" && entity.due_at && !isKind(entity, roles.fixtureEvent))
+    .filter((entity) => entity.type === "event" && !isKind(entity, roles.fixtureEvent) && !eventOver(entity, now, timeZone))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
-  const todays = events.filter((event) => dueDateKey(event.due_at!, timeZone) === today);
-  const soon = events.filter((event) => dueDateKey(event.due_at!, timeZone) > today && withinDays(event.due_at!, now, timeZone, 7)).slice(0, 6);
+  const todays = events.filter((event) => dueDateKey(event.due_at!, timeZone) <= today);
+  const later = events.filter((event) => dueDateKey(event.due_at!, timeZone) > today && withinDays(event.due_at!, now, timeZone, 7));
+  const soon = later.slice(0, 6);
   const fixture = all
-    .filter((entity) => entity.type === "event" && isKind(entity, roles.fixtureEvent) && entity.status !== "cancelled" && entity.due_at && Date.parse(entity.due_at) >= now.getTime())
+    .filter((entity) => entity.type === "event" && isKind(entity, roles.fixtureEvent) && !eventOver(entity, now, timeZone, true))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)))[0];
-  const task = (item: EntityView): ScreenItem => ({ id: item.id, title: item.title, subtitle: taskSubtitle(item, links, timeZone), glyph: "checkbox", done: false });
+  const task = (item: EntityView): ScreenItem => ({ id: item.id, title: item.title, subtitle: taskSubtitle(item, links, timeZone, now), glyph: "checkbox", done: false });
   // Today's routines. A child sees the child's own. A partner sees every child's, with the name.
   const partner = member.role === "partner";
   const routines = all
@@ -673,12 +754,29 @@ export function buildHome(input: ScreenInput, member: { personId: string | null;
   const sections: ScreenSection[] = [];
   if (mine.length) sections.push({ id: "mine", label: "For you", trailing: String(mine.length), items: mine.map(task) });
   if (routines.length) sections.push({ id: "routines", label: "Routines", trailing: routinesLeft ? `${routinesLeft} left` : "All done", items: routines.map(routineItem) });
-  const day = [...todays.map((event) => eventItem(event, links, timeZone, false)), ...dueToday.map(task)];
-  if (day.length) sections.push({ id: "today", label: "Today", items: day });
-  if (soon.length) sections.push({ id: "soon", label: "Coming up", items: soon.map((event) => eventItem(event, links, timeZone, false)) });
+  // Overdue household tasks first, then today's events and tasks, in time order.
+  const late = dueToday.filter((item) => dueDateKey(item.due_at!, timeZone) < today);
+  const dueNow = dueToday.filter((item) => dueDateKey(item.due_at!, timeZone) === today);
+  if (late.length) sections.push({ id: "overdue", label: "Overdue", trailing: String(late.length), items: late.map(task) });
+  const day = [...todays, ...dueNow]
+    .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)))
+    .map((entity) => (entity.type === "event" ? eventItem(entity, links, timeZone, false) : task(entity)));
+  if (day.length) sections.push({ id: "today", label: "Today", trailing: String(day.length), items: day });
+  if (soon.length) {
+    sections.push({
+      id: "soon",
+      label: "Coming up",
+      ...(later.length > soon.length ? { trailing: `${soon.length} of ${later.length}` } : {}),
+      items: soon.map((event) => eventItem(event, links, timeZone, false)),
+    });
+  }
   if (fixture) sections.push({ id: "watch", label: "To watch", items: [eventItem(fixture, links, timeZone, true)] });
   const forToday = mine.filter((item) => item.due_at && dueDateKey(item.due_at, timeZone) <= today).length + (partner ? 0 : routinesLeft);
-  const summary = forToday ? capital(`${countPhrase(forToday, "thing", "things")} for you today.`) : todays.length ? capital(`${countPhrase(todays.length, "thing", "things")} on today.`) : "A quiet day.";
+  const summary = forToday
+    ? capital(`${countPhrase(forToday, "thing", "things")} for you today.`)
+    : day.length + late.length
+      ? capital(`${countPhrase(day.length + late.length, "thing", "things")} on today.`)
+      : "A quiet day.";
   return frame(input, {
     id: "home",
     label: "home",

@@ -179,7 +179,7 @@ test("a mirrored event is read-only in HMN, and the owner can still make it more
   const app = testApp();
   try {
     const sourceId = await addCalendar(app, { area_id: "area_work" });
-    const ics = vcal(["UID:dentist", "SUMMARY:Example appointment", "DTSTART;TZID=Australia/Perth:20261111T110000"]);
+    const ics = vcal(["UID:dentist", "SUMMARY:Example appointment", "DTSTART;TZID=Australia/Perth:20261111T150000"]);
     await tick(app, sourceId, ics);
     const row = event(app, "dentist")!;
 
@@ -225,7 +225,7 @@ test("each calendar has its own tier and its own approval, and a family date sta
       // Yves is a child in the demonstration data. A family date is Private, also from a Public calendar.
       ["UID:family", "SUMMARY:Example school play", "DTSTART;VALUE=DATE:20261111", "ATTENDEE;CN=Yves:mailto:yves@example.com"],
     ));
-    await tick(app, closed, vcal(["UID:closed", "SUMMARY:Example private meeting", "DTSTART;TZID=Australia/Perth:20261111T100000"]));
+    await tick(app, closed, vcal(["UID:closed", "SUMMARY:Example private meeting", "DTSTART;TZID=Australia/Perth:20261111T160000"]));
     const waiting = await tick(app, held, vcal(["UID:held", "SUMMARY:Example shared event", "DTSTART;VALUE=DATE:20261111"]));
 
     expect(event(app, "holiday")).toMatchObject({ tier: "public", area_id: "area_sport" });

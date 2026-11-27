@@ -40,7 +40,7 @@ import { ensureJournals } from "./journal";
 import { ensureDeviceTables } from "./devices/tables";
 import { ensureExternalTables } from "./external/tables";
 import { readPluginSecret, secretConfigured } from "./plugins/secrets";
-import { zoned } from "./time";
+import { readableDue, zoned } from "./time";
 import { buildFridge, fridgeWindow, secondsToNextWindow, type FridgeScreen, type FridgeScreenId } from "./fridge";
 import {
   buildAgents,
@@ -1107,10 +1107,13 @@ export class Hmn {
     if (row.status !== "pending") throw new ApiError(409, "decided", "That proposal is already decided.");
     requireVaultFor(access, row.tier);
     const payload = asObject(this.unpack(row.payload));
-    const entity = asObject(payload.entity);
-    if (typeof patch.title === "string") entity.title = patch.title.slice(0, 200);
-    if ("due_at" in patch) entity.due_at = patch.due_at;
-    if (Object.keys(entity).length) payload.entity = entity;
+    const edits = cleanFields({
+      ...(typeof patch.title === "string" ? { title: patch.title.slice(0, 200) } : {}),
+      ...("due_at" in patch ? { due_at: patch.due_at } : {}),
+    });
+    // A new item changes its entity. A change changes its patch. A removal or a link has no title or date to edit.
+    if (row.op === "create") payload.entity = { ...asObject(payload.entity), ...edits };
+    else if (row.op === "update" && Object.keys(edits).length) payload.patch = { ...asObject(payload.patch), ...edits };
     if (Array.isArray(patch.links)) {
       payload.links = patch.links.map((item) => {
         const link = asObject(item);
@@ -2175,14 +2178,29 @@ export class Hmn {
         .query("UPDATE inbox_items SET body = ?, url = ?, tags = ?, attachments = ?, tier = ?, content_sealed = ?, updated_at = ? WHERE id = ?")
         .run(packed.body, packed.url, packed.tags, packed.attachments, tier, packed.content_sealed, now, id);
     } else if (action === "file") {
+      // Filing keeps the text: it becomes a note about the chosen record, so it shows there. A note that was only
+      // marked as filed would leave every screen.
       const target = this.mustLive(String(input.entity_id ?? ""));
-      assertCanSeeTier(access, ownTier(target, this.areaMap()).tier);
+      const targetTier = ownTier(target, this.areaMap()).tier;
+      assertCanSeeTier(access, targetTier);
+      const noteId = randomId("note");
+      const tier = stricterTier(open.tier, targetTier);
+      this.writeEntity(access, noteId, "note", { title: titleFromBody(open.body), body: open.body, status: "open", tier, properties: { from_inbox: id } }, null, "owner", `inbox:${id}`);
       this.store.db
-        .query("UPDATE inbox_items SET status = 'processed', result_type = ?, result_id = ?, updated_at = ? WHERE id = ?")
-        .run(target.type, target.id, now, id);
+        .query(
+          `INSERT INTO links (id, from_type, from_id, to_type, to_id, rel, origin, origin_ref, tier, created_at, deleted_at)
+           VALUES (?, 'note', ?, ?, ?, 'about', 'owner', ?, NULL, ?, NULL)`,
+        )
+        .run(randomId("link"), noteId, target.type, target.id, `inbox:${id}`, now);
+      this.store.db
+        .query("UPDATE inbox_items SET status = 'processed', result_type = 'note', result_id = ?, updated_at = ? WHERE id = ?")
+        .run(noteId, now, id);
     } else if (action === "accept") {
-      const suggestion = this.suggestionFor(open.tags, access, open.body);
-      if (!suggestion) throw new ApiError(422, "no_route", "Tag it before it can be filed.");
+      // The owner can say what it becomes in one tap: a task, a note, or a person. With no choice, the tags decide.
+      const chosen = typeof input.route === "string" ? input.route : null;
+      if (chosen !== null && !["task", "note", "person"].includes(chosen)) throw new ApiError(422, "bad_route", "It becomes a task, a note, or a person.");
+      const suggestion: InboxSuggestion | null = chosen ? { route: chosen as InboxSuggestion["route"], label: chosen } : this.suggestionFor(open.tags, access, open.body);
+      if (!suggestion) throw new ApiError(422, "no_route", "Choose what it becomes: a task, a note, or a person.");
       const created = this.materialiseInbox(access, open, suggestion);
       this.store.db
         .query("UPDATE inbox_items SET status = 'processed', result_type = ?, result_id = ?, updated_at = ? WHERE id = ?")
@@ -3329,6 +3347,11 @@ export class Hmn {
       this.writeEntity(access, id, "person", { title, kind: "other", tier: item.tier }, null, "owner", originRef);
       return { type: "person", id };
     }
+    if (suggestion.route === "note") {
+      const id = randomId("note");
+      this.writeEntity(access, id, "note", { title, body: item.body, status: "open", tier: item.tier }, null, "owner", originRef);
+      return { type: "note", id };
+    }
     if (suggestion.route === "reading") {
       const id = randomId("note");
       this.writeEntity(access, id, "note", { title, body: item.body, status: "open", tier: item.tier, properties: { reading: true } }, null, "owner", originRef);
@@ -3512,7 +3535,8 @@ export class Hmn {
   }
 
   private screenInput(access: Access) {
-    const views = new Map(this.visible(access).map((view) => [view.id, view]));
+    // A date from before the check on writes, that HMN cannot read, is no date on a screen. The row still shows.
+    const views = new Map(this.visible(access).map((view) => [view.id, view.due_at && !readableDue(view.due_at) ? { ...view, due_at: null } : view]));
     const linkRows = this.store.db.query("SELECT * FROM links WHERE deleted_at IS NULL").all() as LinkRow[];
     const links: SourcedLink[] = [];
     for (const link of linkRows) {
@@ -3559,6 +3583,7 @@ export class Hmn {
     origin = "owner",
     originRef = "owner",
   ) {
+    input = cleanFields(input);
     const areas = this.areaMap();
     if (existing) this.assertCanChange(access, existing, input, areas);
     const areaId = "area_id" in input ? (input.area_id as string | null) : existing?.area_id ?? null;
@@ -4072,6 +4097,12 @@ export class Hmn {
   private tombstoneEntity(access: Access, existing: EntityRow) {
     const tier = ownTier(existing, this.areaMap()).tier;
     assertCanSeeTier(access, tier);
+    // An area gives its items their tier, and an agent's denial names it. Its removal would make a Sealed health note
+    // Personal, and readable by an agent. So an area with items stays until its items are moved or removed.
+    if (existing.type === "area") {
+      const used = (this.store.db.query("SELECT COUNT(*) AS n FROM entities WHERE deleted_at IS NULL AND area_id = ? AND id != ?").get(existing.id, existing.id) as { n: number }).n;
+      if (used > 0) throw new ApiError(409, "area_in_use", `Move or remove the ${used === 1 ? "item" : `${used} items`} in this area first.`);
+    }
     const now = this.now().toISOString();
     this.appendEntityVersion({
       entityId: existing.id,
@@ -4549,3 +4580,17 @@ function looserOf(a: Tier, b: Tier): Tier {
   return covers(a, b) ? a : b;
 }
 
+/**
+ * A write from a client: an empty string is no value, and a date must be one that HMN can read. A free text date
+ * such as "next friday" is refused here, so it never reaches a screen.
+ */
+function cleanFields(input: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...input };
+  for (const key of ["due_at", "status", "kind", "area_id"]) {
+    if (out[key] === "") out[key] = null;
+  }
+  if (out.due_at !== undefined && out.due_at !== null && !readableDue(out.due_at)) {
+    throw new ApiError(422, "bad_date", "Use a date like 2026-12-01, or a date and a time.");
+  }
+  return out;
+}

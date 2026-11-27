@@ -179,11 +179,15 @@ Then, top to bottom:
 1. Greeting, as the title. `Good morning`, `Good afternoon` (from 12:00), or `Good evening` (from 17:00). On the phone, then the name of the person whose kind is `self`, when that person is within the ceiling. "Good afternoon, Alex." On the display, the name is omitted because the person is Personal: "Good afternoon."
 2. The band.
 3. One card for each section. The label of the section is in the card, with a count where it has one.
-4. **Due today.** Open tasks whose due date is today in the owner's zone. A circle, the title, the second line. The second line is the linked project or person or asset, then `· by 17:00` when the due value has a time. A tap on the circle marks the task as done. A line "Done: ..." with **Undo** shows after it.
-5. **Family.** Upcoming events of kind `family` linked with a spouse, child, or family person. The mark of the row is the day of the month. Title is `Yves · school concert` when the event is with one person and the stored title does not already include the name. Second line is `Fri 13/11 · 16:30`.
-6. **On the calendar.** Today's events from a mirrored calendar, in time order. The second line is the start time, or "All day".
-7. **To watch.** The events of kind `fixture` that start in the next 36 hours, at most three: tonight, or early tomorrow when a league plays in another time zone. When more start in that time, their count is on the right. The Upcoming screen lists the rest of the week. The lock screen still names the next fixture, on any day. A badge such as `GT` is allowed when it is a series name, never a result. The second line is the start and the zone label.
-8. **Quiet.** Open tasks with no due date whose `updated_at` is 14 or more days ago. With one item the label is "Quiet for 21 days" in teal. The mark is a dashed teal circle. The second line is "No date".
+4. **Overdue.** Open tasks whose due date is before today, the oldest first, at most four with the count on the right. The second line says how late: "3 days late". A task leaves Overdue when it is done or has a new date.
+5. **Due today.** Open tasks whose due date is today in the owner's zone. A circle, the title, the second line. The second line is the linked project or person or asset, then `· by 17:00` when the due value has a time. A tap on the circle marks the task as done. A line "Done: ..." with **Undo** shows after it.
+6. **Family.** Events of kind `family` in the next seven days that are not over, at most four. "4 of 9" on the right when there are more; Upcoming has the rest. The mark of the row is the day of the month. Title is `Yves · school concert` when the event is with one person and the stored title does not already include the name. Second line is `Fri 13/11 · 16:30`.
+7. **On the calendar.** Today's events from a mirrored calendar that are not over, in time order, with an event of several days that covers today ("Since Mon 23/11"). An all-day event marked free time goes last. The second line is the start time, or "All day".
+8. **To watch.** The events of kind `fixture` that start in the next 36 hours, at most three: tonight, or early tomorrow when a league plays in another time zone. When more start in that time, their count is on the right. The Upcoming screen lists the rest of the week. The lock screen still names the next fixture, on any day. A badge such as `GT` is allowed when it is a series name, never a result. The second line is the start and the zone label.
+9. **Routines.** The owner's own habits that are due today by their days. A routine for a child is the household's, and it is on Home and the fridge.
+10. **Quiet.** Open tasks with no due date whose `updated_at` is 14 or more days ago. With one item the label is "Quiet for 21 days" in teal. The mark is a dashed teal circle. The second line is "No date".
+
+**When an item leaves.** An event leaves every screen when it is over: an all-day event at the end of its last day, a timed event at its end, or one hour after its start when the calendar gives no end (two hours for a fixture). A cancelled event never shows. The next event (the lock screen and the widget) is the first that has not started, else one that is on now. A date that the server cannot read is no date on a screen, and a write with such a date is refused.
 
 The server also makes one sentence from the counts, for example "Three things due, one family date, and one thing that has gone quiet." The widget and the display show it. The phone shows it only when Today has no section, as "The day is clear."
 
@@ -300,16 +304,15 @@ There is no rich editor. The owner can change title, status, due date, and body.
 
 ## Weekly review
 
-Built. One card, same chrome as Today, opened from the Week control under the pager. It is not one of the four rotating screens. Sections, each omitted when empty:
+Built. One card, same chrome as Today, opened from the Week control under the pager. It is not one of the four rotating screens. What needs a decision comes first. Sections, each omitted when empty:
 
 | Section | Content |
 | --- | --- |
+| Slipped | Open tasks whose due date is before today, the oldest first. The second line says how late. |
+| Next 7 days | Today and the next seven days in one list in time order: open tasks with a date, family dates, and fixtures that are not over. A task names its day. |
+| On the calendar | The mirrored events of the next seven days that are not over, in time order, with the day and the time. At most 12. The label on the right is "next 7 days", or "12 of 30" when there are more. A family date and a fixture are in Next 7 days, not here. |
+| Done | Tasks done in the last seven days, by the time they were done, the newest first. |
 | Goals | Active goals and their status. No progress bars. |
-| What moved | Projects that had a task marked done in the last seven days. If none: the section is omitted, and the summary says "No project moved." |
-| Done | Tasks completed in the last seven days. |
-| Next week | Open tasks due in the next seven days, then family events and fixtures in that window. A fixture has its start and no result. |
-| On the calendar | The mirrored events of the next seven days, in time order, with the day and the time. At most 12. The label on the right is "next 7 days", or "12 of 30" when there are more. A family date and a fixture are in Next week, not here. |
-| Slipped | Open tasks whose due date is before today. |
 | Quiet | The same quiet rule as Today. |
 
 Summary line, examples: "Two things done, one slipped, no project moved." Closing line, always: "Decide what next week is for. Leave the rest."

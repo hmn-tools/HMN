@@ -4,7 +4,7 @@
  * so a hidden row is absent here as everywhere. docs/ONTOLOGY.md, sections 2.2 and 5.2.
  */
 import type { EntityView, LinkView } from "./policy";
-import { dueDateKey, hasClock, zoned } from "./time";
+import { dueDateKey, eventOver, hasClock, zoned } from "./time";
 
 /** A row linked to the person. `when` is "Fri 13/11 · 16:30", "today", or null for a row with no date. */
 export type PersonLinked = { entity: EntityView; rel: string; direction: "out" | "in"; link_id: string; when: string | null };
@@ -52,7 +52,7 @@ export function buildPersonPage(input: {
   const byDue = (a: PersonLinked, b: PersonLinked) => String(a.entity.due_at ?? "9999").localeCompare(String(b.entity.due_at ?? "9999"));
   const isTask = (row: PersonLinked) => row.entity.type === "task" && row.entity.kind !== "item";
   const next = linked
-    .filter((row) => row.entity.type === "event" && row.entity.status !== "cancelled" && row.entity.due_at && dueDateKey(row.entity.due_at, timeZone) >= today)
+    .filter((row) => row.entity.type === "event" && !eventOver(row.entity, now, timeZone))
     .sort(byDue)
     .slice(0, NEXT_MAX);
   const tasks = linked.filter((row) => isTask(row) && row.entity.status !== "done").sort(byDue);
