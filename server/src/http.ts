@@ -420,6 +420,8 @@ async function route(hmn: Hmn, req: Request, ip: string | null, fingerprint: str
   }
   const yearNote = pathname.match(/^\/api\/v1\/review\/year\/(\d{4})\/note$/);
   if (req.method === "PUT" && yearNote) return json(hmn.saveYearNote(access, Number(yearNote[1]), await readJson(req)));
+  // What a client needs to show and edit any row. docs/UX-PASS.md, batch 2.
+  if (req.method === "GET" && pathname === "/api/v1/schema") return json(hmn.schema(access));
   // The people, and the person page. docs/ONTOLOGY.md, section 5.2.
   if (req.method === "GET" && pathname === "/api/v1/people") return json({ people: hmn.people(access) });
   const personPage = pathname.match(/^\/api\/v1\/person\/([^/]+)\/page$/);
@@ -433,7 +435,7 @@ async function route(hmn: Hmn, req: Request, ip: string | null, fingerprint: str
     const type = entity[1]!;
     const id = entity[2] ? decodeURIComponent(entity[2]) : null;
     const tail = entity[3];
-    if (req.method === "GET" && !id) return json({ entities: hmn.list(access, type as never) });
+    if (req.method === "GET" && !id) return json({ entities: hmn.list(access, type as never, { archived: url.searchParams.get("archived") === "1" }) });
     if (req.method === "POST" && !id) return json(hmn.create(access, type as never, await readJson(req)), 201);
     if (req.method === "GET" && id && tail === "links") return json({ links: hmn.linksOf(access, type as never, id) });
     if (req.method === "GET" && id) return json(hmn.get(access, type as never, id));

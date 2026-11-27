@@ -26,6 +26,8 @@ The owner asked on 2026-11-27 for a full pass on the app: buttons, status, data 
 
 ## Batch 2: knowledge and editing
 
+The server half is done on 2026-11-27: items 1, 2, 3, 7 (the single route was there), and 9, with typed fields for people, places, assets, goals, notes, and projects in the schema route. The rules are in [SCHEMA.md](SCHEMA.md), "Archive, note kinds, fields, and links". The app half is next.
+
 1. **Archive.** One archived state for notes, goals, projects, people, places, assets, areas, and events. Archived rows leave lists, search, and screens, and stay readable with "Show archived". Archive is the first choice in each editor; Delete is behind it.
 2. **Note kinds.** Notes get kinds: note, reference, decision, fact, reading, review, and capture. `properties.reading` and `properties.year_review` move to kinds once, at the next start.
 3. **One schema route.** `GET /api/v1/schema` returns the statuses, the kinds with their titles, and the relations, so the app stops copying them. This fixes the event status that the server refused ("Done" for an event).

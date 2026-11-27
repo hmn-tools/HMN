@@ -11,6 +11,8 @@ export const ROLES: Record<string, string[]> = {
   event: ["family", "fixture"],
   // Where family dates, fixtures, and health summaries go, which areas an agent key cannot read by default, and which areas hold work.
   area: ["family", "work", "health", "money", "sport"],
+  // `reading` is a note to read later. `review` is the owner's note for a year.
+  note: ["reading", "review"],
 };
 
 /**
@@ -54,6 +56,13 @@ export const DEFAULT_KINDS: Seed[] = [
   ["area", "sport", "Sport", "sport", 0],
   ["area", "home", "Home", null, 0],
   ["area", "other", "Other", null, 1],
+  ["note", "note", "Note", null, 1],
+  ["note", "reference", "Reference", null, 0],
+  ["note", "decision", "Decision", null, 0],
+  ["note", "fact", "Fact", null, 0],
+  ["note", "reading", "To read", "reading", 1],
+  ["note", "review", "Year review", "review", 1],
+  ["note", "capture", "Capture", null, 1],
   ["place", "home", "Home", null, 0],
   ["place", "other", "Other", null, 1],
   ["asset", "other", "Other", null, 1],
@@ -93,6 +102,7 @@ export function ensureKindTables(db: Database) {
   }
   seedKinds(db, DEFAULT_KINDS);
   db.query("INSERT OR IGNORE INTO meta (key, value) VALUES ('kinds_organisation', '1')").run();
+  db.query("INSERT OR IGNORE INTO meta (key, value) VALUES ('kinds_note', '1')").run();
   // A graph from before this table: keep each kind that a row already uses, so that no row becomes invalid.
   const used = db
     .query(`SELECT DISTINCT type, kind FROM entities WHERE kind IS NOT NULL AND type IN (${KIND_TYPES.map(() => "?").join(",")})`)
@@ -108,9 +118,27 @@ export function ensureKindTables(db: Database) {
  * The person kind `organisation` came on 24/11/2026.
  */
 function addedKinds(db: Database) {
-  if (db.query("SELECT 1 FROM meta WHERE key = 'kinds_organisation'").get()) return;
-  seedKinds(db, [["person", "organisation", "Organisation", "organisation", 1]]);
-  db.query("INSERT INTO meta (key, value) VALUES ('kinds_organisation', '1')").run();
+  if (!db.query("SELECT 1 FROM meta WHERE key = 'kinds_organisation'").get()) {
+    seedKinds(db, [["person", "organisation", "Organisation", "organisation", 1]]);
+    db.query("INSERT INTO meta (key, value) VALUES ('kinds_organisation', '1')").run();
+  }
+  // The note kinds came on 2026-11-27. A note that was a reading note or a year note by a property gets its kind.
+  if (!db.query("SELECT 1 FROM meta WHERE key = 'kinds_note'").get()) {
+    seedKinds(db, DEFAULT_KINDS.filter((row) => row[0] === "note"));
+    noteKindsFromProperties(db);
+    db.query("INSERT INTO meta (key, value) VALUES ('kinds_note', '1')").run();
+  }
+}
+
+/** A Sealed note keeps no kind here, because its properties are sealed. Its kind is set when the owner edits it. */
+function noteKindsFromProperties(db: Database) {
+  const has = db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'entities'").get();
+  if (!has) return;
+  db.exec(`
+    UPDATE entities SET kind = 'reading' WHERE type = 'note' AND kind IS NULL AND content_sealed = 0 AND json_extract(properties, '$.reading') = 1;
+    UPDATE entities SET kind = 'review' WHERE type = 'note' AND kind IS NULL AND content_sealed = 0 AND json_extract(properties, '$.year_review') IS NOT NULL;
+    UPDATE entities SET kind = 'capture' WHERE type = 'note' AND kind IS NULL AND content_sealed = 0 AND json_extract(properties, '$.from_inbox') IS NOT NULL;
+  `);
 }
 
 export function seedKinds(db: Database, rows: Seed[]) {

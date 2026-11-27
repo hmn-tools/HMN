@@ -125,3 +125,22 @@ test("a graph from before gets the kind organisation once, and the kind is a row
   expect(has()).toBe(false);
   db.close();
 });
+
+test("an older graph gets the note kinds once, and a reading note gets its kind", () => {
+  const db = new Database(":memory:");
+  db.exec("CREATE TABLE entities (id TEXT, type TEXT, kind TEXT, content_sealed INTEGER, properties TEXT)");
+  ensureKindTables(db);
+  // An older graph: kinds exist, the note kinds and their marker do not, and two notes carry the old properties.
+  db.query("DELETE FROM kinds WHERE type = 'note'").run();
+  db.query("DELETE FROM meta WHERE key = 'kinds_note'").run();
+  db.query("INSERT INTO entities VALUES ('note_a', 'note', NULL, 0, ?)").run(JSON.stringify({ reading: true }));
+  db.query("INSERT INTO entities VALUES ('note_b', 'note', NULL, 0, ?)").run(JSON.stringify({ year_review: 2026 }));
+  db.query("INSERT INTO entities VALUES ('note_c', 'note', NULL, 1, 'sealed text')").run();
+  ensureKindTables(db);
+  const kindOf = (id: string) => (db.query("SELECT kind FROM entities WHERE id = ?").get(id) as { kind: string | null }).kind;
+  expect(kindOf("note_a")).toBe("reading");
+  expect(kindOf("note_b")).toBe("review");
+  expect(kindOf("note_c")).toBeNull();
+  expect((db.query("SELECT COUNT(*) AS n FROM kinds WHERE type = 'note'").get() as { n: number }).n).toBe(7);
+  db.close();
+});

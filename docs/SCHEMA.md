@@ -520,6 +520,7 @@ The surface is `X-HMN-Surface: phone | widget | display | lock | mcp`. Display r
 | `DELETE /api/v1/links/:id` | write | Soft-delete a link. |
 | `GET /api/v1/review/year?year=` | read, write, agent | The yearly review: `year`, `greeting`, `summary`, `closing`, `sections` (as a screen), `note` (the owner's note for the year, or null), and `years` (from the first row to now, the newest first). No `year` means this year. A year after this one gets 422. |
 | `PUT /api/v1/review/year/:year/note` | write, owner | `{ body }`. Makes or changes the one Private note of the year (`properties.year_review`). A member gets 403. |
+| `GET /api/v1/schema` | read, write, agent | `{ statuses, kinds, relations, fields }`. The statuses of each type, the kinds with their titles, the relations with the words for each direction (`out`, `in`), and the typed fields of each type (`key`, `label`, `type`: text, long, date, number, url, choice). A client builds its editors from this. See "Archive, note kinds, fields, and links". |
 | `GET /api/v1/people` | read, write, agent | Each person, with `line` (the kind, and the next date with them) and `organisation`. People first, by name, then organisations. |
 | `GET /api/v1/person/:id/page` | read, write, agent | The person page: `person`, `kind_title`, `organisation`, `line`, and the linked rows in `next` (events from today, at most 5), `tasks` (open), `done` (the last 14 days), `notes`, `things` (assets and places), `people`, `other`, and `routines`. Each row has `entity`, `rel`, and `when`. A row the caller cannot read is absent. |
 | `GET /api/v1/routines` | read, write, agent | Each habit that is `for` a person, with those people (`for`), its `days`, `due_today`, and `done_today`. By person, then title. |
@@ -971,3 +972,16 @@ The agent key is the one MCP uses. The display key is the one the e-ink device u
 ## Time
 
 The server zone is `HMN_TZ`. With no value it is the zone of the machine, and the install writes the zone of the Mac into the launchd job. A container has no zone of its own, so the compose file uses UTC unless `HMN_TZ` is set. Tests use `Australia/Perth` and set `HMN_NOW` to `2026-11-11T04:39:00.000Z`, which is 12:39 in that zone, a Wednesday, and the afternoon greeting. Quiet age is the difference in calendar dates in that zone, not a raw 24-hour divide.
+
+## Archive, note kinds, fields, and links
+
+Added on 2026-11-27, in the pass of [UX-PASS.md](UX-PASS.md), batch 2.
+
+- **Archive.** `archived` is a status of a note, a goal, a project, a person, a place, an asset, and an area. An archived row leaves `GET /api/v1/<type>` (unless `?archived=1`), search, People, and the screens. It stays readable by its id, and its links stay. A row with no status is the first status of its type.
+- **Lists.** `GET /api/v1/<type>` puts open rows first, then by date (a time on a day before "that day"), then the newest. The cut at 200 comes after that order.
+- **Note kinds.** A note has a kind: `note`, `reference`, `decision`, `fact`, `reading` (role `reading`), `review` (role `review`, the owner's note for a year), and `capture` (filed from the inbox). At the first start of this version, a note with `properties.reading` gets the kind `reading`, one with `properties.year_review` gets `review`, and one with `properties.from_inbox` gets `capture`. A Sealed note keeps no kind until the owner edits it.
+- **Fields.** `PATCH /api/v1/<type>/<id>` takes `properties_patch`: the keys it names change, a key set to null is removed, and every other key stays. The fields that a client shows are in `GET /api/v1/schema`.
+- **Links.** A link's relation is one of `part_of`, `for`, `with`, `about`, `at`, `in`, `from`, `cares_for`, `serves`, `related` (422 `bad_rel` for another). A row cannot link to itself (422 `self_link`). A second request for the same live link returns the first one, and an approved link proposal for a link that is there already makes no copy.
+- **Dates.** `due_at` is a date (YYYY-MM-DD) or a full instant. Another value is refused with 422 `bad_date`. An empty string for `due_at`, `status`, `kind`, or `area_id` is no value.
+- **Areas.** An area that still has items cannot be removed (409 `area_in_use`), because its items take their tier from it.
+- **Inbox.** `POST /api/v1/inbox/<id>/process` with `{ "action": "accept", "route": "task" | "note" | "person" }` makes that item in one step, with no tag. `{ "action": "file", "entity_id": … }` makes a note of the kind `capture` with the text, at the stricter tier of the capture and the record, linked `about` the record.

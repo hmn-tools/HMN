@@ -31,13 +31,21 @@ export type OpenEntity = EntityRow & {
   tierSource: "override" | "area" | "default";
 };
 
-const STATUS: Record<string, string[]> = {
-  goal: ["active", "paused", "done"],
-  project: ["active", "paused", "done", "someday"],
+/**
+ * The statuses of each type. `archived` keeps a row that is old but worth keeping: it leaves lists, search, and
+ * screens, and it stays readable. No status (null) is the same as the first status of the type.
+ */
+export const STATUS: Record<string, string[]> = {
+  goal: ["active", "paused", "done", "archived"],
+  project: ["active", "paused", "done", "someday", "archived"],
   task: ["inbox", "open", "done"],
-  note: ["open"],
+  note: ["open", "archived"],
   event: ["upcoming", "past", "cancelled"],
   habit: ["active", "paused"],
+  person: ["active", "archived"],
+  place: ["active", "archived"],
+  asset: ["active", "archived"],
+  area: ["active", "archived"],
 };
 
 /** `nowIso` decides if a Private grant is still open. With no time, there is no grant. */

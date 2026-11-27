@@ -23,6 +23,7 @@ import {
   projectProposal,
   requireVaultFor,
   rowCeiling,
+  STATUS,
   type AreaInfo,
   type EntityView,
   type ProposalSummary,
@@ -318,12 +319,26 @@ export class Hmn {
     return principalFromRow(row, now);
   }
 
-  list(access: Access, type: EntityType): EntityView[] {
+  /**
+   * The rows of one type. An item of a list, or a step, is read with its list or its task, so it does not fill the
+   * list of tasks. An archived row is left out unless `archived` is true. Open rows come first, then by date, then
+   * the newest, and the cut at 200 comes after that order, so the newest rows are never the ones cut.
+   */
+  list(access: Access, type: EntityType, options: { archived?: boolean } = {}): EntityView[] {
     this.knownType(type);
-    // An item of a list, or a step, is read with its list or its task, so it does not fill the list of tasks.
-    const views = this.visible(access).filter((view) => view.type === type && !(type === "task" && view.kind === "item"));
+    const closed = new Set(["done", "archived", "cancelled", "past"]);
+    const views = this.visible(access)
+      .filter((view) => view.type === type && !(type === "task" && view.kind === "item"))
+      .filter((view) => options.archived || view.status !== "archived")
+      .sort(
+        (a, b) =>
+          Number(closed.has(a.status ?? "")) - Number(closed.has(b.status ?? "")) ||
+          dueSortKey(a.due_at).localeCompare(dueSortKey(b.due_at)) ||
+          b.updated_at.localeCompare(a.updated_at),
+      )
+      .slice(0, 200);
     for (const view of views) this.noteRead(access, view);
-    return views.slice(0, 200);
+    return views;
   }
 
   get(access: Access, type: EntityType, id: string): EntityView {
@@ -368,8 +383,10 @@ export class Hmn {
     for (const view of views) {
       if (!seen.has(view.id) && `${view.title}\n${view.body ?? ""}`.toLowerCase().includes(needle)) found.push(view);
     }
-    for (const view of found.slice(0, 40)) this.noteRead(access, view);
-    return found.slice(0, 40);
+    // An archived row is kept, and it is not in a search.
+    const live = found.filter((view) => view.status !== "archived");
+    for (const view of live.slice(0, 40)) this.noteRead(access, view);
+    return live.slice(0, 40);
   }
 
   /** Entity ids in rank order, for every tier except Sealed. The caller removes what the ceiling does not allow. */
@@ -558,6 +575,17 @@ export class Hmn {
     if (this.isMirrored(existing) && Object.keys(patch).some((key) => key !== "tier")) {
       throw new ApiError(409, "mirrored", "This event comes from a calendar. Change it in the calendar.");
     }
+    // `properties_patch` changes some keys and keeps the rest, so a client that shows a few fields never drops the
+    // others. A key set to null is removed.
+    if (patch.properties_patch !== undefined) {
+      const { properties_patch: changes, ...rest } = patch;
+      const properties = { ...asObject(this.plain(existing).properties) };
+      for (const [key, value] of Object.entries(asObject(changes))) {
+        if (value === null) delete properties[key];
+        else properties[key] = value;
+      }
+      patch = { ...rest, properties };
+    }
     this.writeEntity(access, id, type, patch, existing);
     const view = this.get(access, type, id);
     this.store.persist();
@@ -649,6 +677,8 @@ export class Hmn {
     const to = this.mustLive(toId);
     const tier = stricterTier(ownTier(from, this.areaMap()).tier, ownTier(to, this.areaMap()).tier);
     assertCanSeeTier(access, tier);
+    const same = this.checkLink(from.id, to.id, rel);
+    if (same) return { id: same, rel, from_id: from.id, to_id: to.id, tier };
     const id = randomId("link");
     const now = this.now().toISOString();
     this.store.db
@@ -960,6 +990,22 @@ export class Hmn {
     return (this.store.db.query("SELECT to_id FROM links WHERE deleted_at IS NULL AND rel = 'part_of' AND from_id = ?").all(itemId) as Array<{ to_id: string }>).map((row) => row.to_id);
   }
 
+  /**
+   * A link has a relation that HMN knows, and it joins two different rows. Returns the id of the same live link when
+   * it is there already, so a second tap or a second proposal makes no copy.
+   */
+  private checkLink(fromId: string, toId: string, rel: string): string | null {
+    if (!RELATIONS.some((item) => item.rel === rel)) throw new ApiError(422, "bad_rel", `A link is one of: ${RELATIONS.map((item) => item.rel).join(", ")}.`);
+    if (fromId === toId) throw new ApiError(422, "self_link", "A row cannot link to itself.");
+    const same = this.store.db.query("SELECT id FROM links WHERE deleted_at IS NULL AND from_id = ? AND to_id = ? AND rel = ?").get(fromId, toId, rel) as { id: string } | null;
+    return same?.id ?? null;
+  }
+
+  /** What a client needs to show and edit any row: the statuses, the kinds, the relations, and the typed fields. */
+  schema(access: Access) {
+    return { statuses: STATUS, kinds: this.kindsList(access).kinds, relations: RELATIONS, fields: FIELDS };
+  }
+
   removeLink(access: Access, id: string) {
     assertScope(access, "write");
     const link = this.store.db.query("SELECT * FROM links WHERE id = ? AND deleted_at IS NULL").get(id) as LinkRow | null;
@@ -1223,14 +1269,17 @@ export class Hmn {
         const link = asObject(payload.link);
         const from = this.mustLive(requiredString(link.from_id));
         const to = this.mustLive(requiredString(link.to_id));
-        const linkId = randomId("link");
-        this.store.db
-          .query(
-            `INSERT INTO links (id, from_type, from_id, to_type, to_id, rel, origin, origin_ref, tier, created_at, deleted_at)
-             VALUES (?, ?, ?, ?, ?, ?, 'agent', ?, NULL, ?, NULL)`,
-          )
-          .run(linkId, from.type, from.id, to.type, to.id, requiredString(link.rel), row.agent_name, this.now().toISOString());
-        applied.link_ids.push(linkId);
+        // A link that is there already is not made twice. The proposal is still approved.
+        if (!this.checkLink(from.id, to.id, requiredString(link.rel))) {
+          const linkId = randomId("link");
+          this.store.db
+            .query(
+              `INSERT INTO links (id, from_type, from_id, to_type, to_id, rel, origin, origin_ref, tier, created_at, deleted_at)
+               VALUES (?, ?, ?, ?, ?, ?, 'agent', ?, NULL, ?, NULL)`,
+            )
+            .run(linkId, from.type, from.id, to.type, to.id, requiredString(link.rel), row.agent_name, this.now().toISOString());
+          applied.link_ids.push(linkId);
+        }
       } else if (row.op === "unlink") {
         const linkId = requiredString(payload.id);
         this.store.db.query("UPDATE links SET deleted_at = ? WHERE id = ?").run(this.now().toISOString(), linkId);
@@ -2185,7 +2234,7 @@ export class Hmn {
       assertCanSeeTier(access, targetTier);
       const noteId = randomId("note");
       const tier = stricterTier(open.tier, targetTier);
-      this.writeEntity(access, noteId, "note", { title: titleFromBody(open.body), body: open.body, status: "open", tier, properties: { from_inbox: id } }, null, "owner", `inbox:${id}`);
+      this.writeEntity(access, noteId, "note", { title: titleFromBody(open.body), body: open.body, status: "open", kind: "capture", tier, properties: { from_inbox: id } }, null, "owner", `inbox:${id}`);
       this.store.db
         .query(
           `INSERT INTO links (id, from_type, from_id, to_type, to_id, rel, origin, origin_ref, tier, created_at, deleted_at)
@@ -2840,7 +2889,7 @@ export class Hmn {
       const view = this.update(access, "note", existing.id, { body });
       return view;
     }
-    return this.create(access, "note", { title: `The year ${year}`, body, status: "open", tier: "private", properties: { year_review: year } });
+    return this.create(access, "note", { title: `The year ${year}`, body, status: "open", kind: "review", tier: "private", properties: { year_review: year } });
   }
 
   private yearNote(views: Map<string, EntityView>, year: number): EntityView | null {
@@ -2864,7 +2913,7 @@ export class Hmn {
     const byId = new Map(views.map((view) => [view.id, view]));
     const all = this.store.db.query("SELECT * FROM links WHERE deleted_at IS NULL").all() as LinkRow[];
     const out = views
-      .filter((view) => view.type === "person")
+      .filter((view) => view.type === "person" && view.status !== "archived")
       .map((person) => {
         const rows = all.filter((link) => link.from_id === person.id || link.to_id === person.id);
         const page = buildPersonPage({ person, links: projectLinks(person.id, rows, byId), views: byId, now: this.now(), timeZone: this.timeZone, ...this.personKind(person) });
@@ -3349,12 +3398,12 @@ export class Hmn {
     }
     if (suggestion.route === "note") {
       const id = randomId("note");
-      this.writeEntity(access, id, "note", { title, body: item.body, status: "open", tier: item.tier }, null, "owner", originRef);
+      this.writeEntity(access, id, "note", { title, body: item.body, status: "open", kind: "note", tier: item.tier }, null, "owner", originRef);
       return { type: "note", id };
     }
     if (suggestion.route === "reading") {
       const id = randomId("note");
-      this.writeEntity(access, id, "note", { title, body: item.body, status: "open", tier: item.tier, properties: { reading: true } }, null, "owner", originRef);
+      this.writeEntity(access, id, "note", { title, body: item.body, status: "open", kind: "reading", tier: item.tier, properties: { reading: true } }, null, "owner", originRef);
       return { type: "note", id };
     }
     if (suggestion.route === "file" && suggestion.entity_id) {
@@ -4593,4 +4642,51 @@ function cleanFields(input: Record<string, unknown>): Record<string, unknown> {
     throw new ApiError(422, "bad_date", "Use a date like 2026-12-01, or a date and a time.");
   }
   return out;
+}
+
+/** The relations of the graph, with the words for each direction. docs/ONTOLOGY.md, section 2.3. */
+export const RELATIONS: Array<{ rel: string; out: string; in: string }> = [
+  { rel: "part_of", out: "Part of", in: "Has" },
+  { rel: "for", out: "For", in: "Is for them" },
+  { rel: "with", out: "With", in: "With them" },
+  { rel: "about", out: "About", in: "About them" },
+  { rel: "at", out: "At", in: "Happens here" },
+  { rel: "in", out: "In", in: "Holds" },
+  { rel: "from", out: "From", in: "Gave" },
+  { rel: "cares_for", out: "Cares for", in: "Cared for by" },
+  { rel: "serves", out: "Serves", in: "Served by" },
+  { rel: "related", out: "Related to", in: "Related to" },
+];
+
+/**
+ * The typed fields that a person sees and edits for each type, kept in `properties` under the same key. A client
+ * shows a form from this list, so no one edits JSON. A key that is not here is kept as it is.
+ */
+export const FIELDS: Record<string, Array<{ key: string; label: string; type: "text" | "long" | "date" | "number" | "url" | "choice"; choices?: string[] }>> = {
+  person: [
+    { key: "nickname", label: "Nickname", type: "text" },
+    { key: "birthday", label: "Birthday", type: "date" },
+    { key: "anniversary", label: "Anniversary", type: "date" },
+    { key: "address_line", label: "Address", type: "text" },
+    { key: "last_contact", label: "Last in touch", type: "date" },
+  ],
+  place: [
+    { key: "address_line", label: "Address", type: "text" },
+    { key: "url", label: "Website or map", type: "url" },
+  ],
+  asset: [
+    { key: "model", label: "Make and model", type: "text" },
+    { key: "year", label: "Year", type: "number" },
+    { key: "expires", label: "Renewal or expiry", type: "date" },
+    { key: "url", label: "Manual or folder", type: "url" },
+  ],
+  goal: [{ key: "horizon", label: "Horizon", type: "choice", choices: ["year", "quarter", "open"] }],
+  note: [{ key: "url", label: "Link", type: "url" }],
+  project: [{ key: "outcome", label: "Outcome", type: "text" }],
+};
+
+/** A sort key for `due_at`: a time on a day comes before "some time that day", and no date comes last. */
+function dueSortKey(due: string | null): string {
+  if (!due) return "9999";
+  return due.length === 10 ? `${due}T99` : due;
 }

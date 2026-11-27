@@ -89,3 +89,71 @@ test("editing a proposed change edits its change, and a bad date is refused ther
     app.close();
   }
 });
+
+test("an archived row leaves lists and search, and it stays readable", async () => {
+  const app = testApp();
+  try {
+    const made = await call(app, "/api/v1/note", { method: "POST", ...owner(app), body: { title: "Example old boiler manual", status: "open", kind: "reference" } });
+    const id = (made.json as { id: string }).id;
+    expect((await call(app, `/api/v1/note/${id}`, { method: "PATCH", ...owner(app), body: { status: "archived" } })).status).toBe(200);
+    const titles = async (path: string) => ((await call(app, path, owner(app))).json as { entities?: Array<{ title: string }>; results?: Array<{ title: string }> });
+    expect((await titles("/api/v1/note")).entities!.map((row) => row.title)).not.toContain("Example old boiler manual");
+    expect((await titles("/api/v1/note?archived=1")).entities!.map((row) => row.title)).toContain("Example old boiler manual");
+    expect((await titles("/api/v1/search?q=boiler")).results!.map((row) => row.title)).not.toContain("Example old boiler manual");
+    expect((await call(app, `/api/v1/note/${id}`, owner(app))).status).toBe(200);
+    // A person can be archived too, and leaves People.
+    expect((await call(app, "/api/v1/person/person_sam", { method: "PATCH", ...owner(app), body: { status: "archived" } })).status).toBe(200);
+    const people = (await call(app, "/api/v1/people", owner(app))).json as { people: Array<{ person: { id: string } }> };
+    expect(people.people.map((row) => row.person.id)).not.toContain("person_sam");
+  } finally {
+    app.close();
+  }
+});
+
+test("the schema names the statuses, the note kinds, the relations, and the fields", async () => {
+  const app = testApp();
+  try {
+    const schema = (await call(app, "/api/v1/schema", owner(app))).json as {
+      statuses: Record<string, string[]>;
+      kinds: Array<{ type: string; kind: string; title: string }>;
+      relations: Array<{ rel: string; out: string }>;
+      fields: Record<string, Array<{ key: string; type: string }>>;
+    };
+    expect(schema.statuses.event).toEqual(["upcoming", "past", "cancelled"]);
+    expect(schema.statuses.note).toContain("archived");
+    expect(schema.kinds.filter((row) => row.type === "note").map((row) => row.kind)).toEqual(expect.arrayContaining(["note", "reference", "decision", "fact", "reading", "review", "capture"]));
+    expect(schema.relations.find((row) => row.rel === "for")?.out).toBe("For");
+    expect(schema.fields.person!.map((field) => field.key)).toContain("birthday");
+  } finally {
+    app.close();
+  }
+});
+
+test("a field change keeps the other properties", async () => {
+  const app = testApp();
+  try {
+    await call(app, "/api/v1/person/person_sam", { method: "PATCH", ...owner(app), body: { properties_patch: { birthday: "1990-04-02", secret_handshake: "kept" } } });
+    const changed = await call(app, "/api/v1/person/person_sam", { method: "PATCH", ...owner(app), body: { properties_patch: { nickname: "Example Sammy", secret_handshake: null } } });
+    expect(changed.status).toBe(200);
+    expect((changed.json as { properties: Record<string, unknown> }).properties).toMatchObject({ birthday: "1990-04-02", nickname: "Example Sammy" });
+    expect((changed.json as { properties: Record<string, unknown> }).properties.secret_handshake).toBeUndefined();
+  } finally {
+    app.close();
+  }
+});
+
+test("a link must have a known relation, join two rows, and is not made twice", async () => {
+  const app = testApp();
+  try {
+    const link = (rel: string, from = "task_notes", to = "person_sam") =>
+      call(app, "/api/v1/links", { method: "POST", ...owner(app), body: { from_type: "task", from_id: from, to_type: "person", to_id: to, rel } });
+    expect((await link("banana")).status).toBe(422);
+    expect((await link("about", "task_notes", "task_notes")).status).toBe(422);
+    const first = await link("for");
+    const second = await link("for");
+    expect(first.status).toBe(201);
+    expect((second.json as { id: string }).id).toBe((first.json as { id: string }).id);
+  } finally {
+    app.close();
+  }
+});
