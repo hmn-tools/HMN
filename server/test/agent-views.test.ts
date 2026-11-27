@@ -68,9 +68,11 @@ test("person_page of a hidden person answers as get_entity does", async () => {
     expect(hiddenPage.data.error).toBe(hiddenGet.data.error);
     const missing = await tool(app, agent, "person_page", { id: "person_nobody" });
     expect(missing.data.error).toBe(hiddenPage.data.error);
-    // A person the key can see has a page.
-    if (!page.isError) expect(page.data.title).toBe("Sam");
-    else expect(page.data.error).toBe(hiddenGet.data.error);
+    // Sam is in the Family area, which the agent key cannot read. Alex has no area, so the agent sees Alex's page.
+    expect(page.isError).toBe(true);
+    const visible = await tool(app, agent, "person_page", { id: "person_alex" });
+    expect(visible.isError).toBe(false);
+    expect(visible.data.title).toBe("Alex");
     // The owner sees the hidden person.
     expect((await call(app, "/api/v1/person/person_luca/page", owner(app))).status).toBe(200);
   } finally {
