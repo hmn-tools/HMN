@@ -489,7 +489,7 @@ On 2026-11-23 seven auditors read the code and attacked throwaway test servers w
 
 ## Later, unscheduled
 
-- Live Activities. The lock screen, StandBy, and the public next-event card are in. A Live Activity that updates on its own is not.
+- Live Activities. The lock screen, StandBy, and the household next-event card are in. A Live Activity that updates on its own is not.
 - Money as a Sealed area with a screen. Default remains no agent access.
 - Third-party plugins. HMN does not run the code of a third party, and it has no plugin SDK. Software of a third party runs outside, on top of HMN, through the read contract and the proposal contract.
 - The read contract. Decided on 2026-11-20 and written in [STRATEGY.md](STRATEGY.md). Built on 2026-11-20: a view key with the scope `read`, which cannot propose, and the read log for such a key. Built on 2026-11-23: the written format of each screen and of one entity, in SCHEMA.md under "The read format", with a test that reads the tables. Open work, in order: a stability rule for `/api/v1`, and later pages and a `changed_after` parameter. The owner has two points to decide there.

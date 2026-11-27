@@ -219,6 +219,10 @@ test("the ceiling of an agent key is one rule, for a local key and for an outsid
   expect(at({ max_tier: "sealed", private_until: null }, "2026-11-30T00:00:00.000Z", "phone")).toBe("personal");
   expect(at({}, "2026-11-30T00:00:00.000Z", "display")).toBe("public");
   expect(at({}, "2026-11-30T00:00:00.000Z", "widget")).toBe("personal");
+  // Lock is Household, even while a Private grant is open. A Public key stays Public.
+  expect(at({}, "2026-11-30T00:00:00.000Z", "lock")).toBe("household");
+  expect(at({ max_tier: "public" }, "2026-11-30T00:00:00.000Z", "lock")).toBe("public");
+  expect(at({ forced_ceiling: "public" }, "2026-11-30T00:00:00.000Z", "lock")).toBe("public");
   // No time means no grant.
   expect(resolveCeiling(principalFromRow(row), "mcp", true)).toBe("personal");
 });

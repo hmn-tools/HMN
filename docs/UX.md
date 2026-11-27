@@ -379,7 +379,7 @@ Home screen widget, two sizes. The layout matches the home mock. The contents ar
 
 The widget does not show quiet items, fixtures' results (there are none), proposal text, or anything Private or Sealed. Tapping opens the app on Today.
 
-Lock screen accessories, the StandBy widget, and the Live Activity for the next event are Public. They read `GET /api/v1/screens/lock`, which stays Public even if the phone has a vault grant. The home-screen widget is a different snapshot and stays Personal. With the demonstration data the public card is the race and its start. A routine check-in on Today marks that habit for the day. It does not count streaks.
+Lock screen accessories, the StandBy widget, and the Live Activity for the next event are Household. They read `GET /api/v1/screens/lock`, which stays at Household even if the phone has a vault grant, and never reads Personal, Private, or Sealed. The home-screen widget is a different snapshot and stays Personal; its medium family lists overdue tasks as well as what is due today. With the demonstration data the lock card is the race and its start, which is Public and so still visible at Household. A routine check-in on Today marks that habit for the day. It does not count streaks. If nothing at Household is next, StandBy says so, and does not use "To watch" as an empty label.
 
 ## Empty states
 

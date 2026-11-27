@@ -9,13 +9,13 @@ beforeAll(() => {
 });
 afterAll(() => app.close());
 
-test("lock, standby, and the next-event payload stay public", async () => {
+test("lock, standby, and the next-event payload stay at household, never personal or private", async () => {
   const lock = await call(app, "/api/v1/screens/lock", { key: app.secrets!.owner, surface: "phone" });
   expect(lock.status).toBe(200);
   expect(lock.text).toContain("Lakeside Grand Prix");
   expect(lock.text).not.toContain("no results");
   expect((lock.json as { due_count: number; ceiling: string }).due_count).toBe(0);
-  expect((lock.json as { ceiling: string }).ceiling).toBe("public");
+  expect((lock.json as { ceiling: string }).ceiling).toBe("household");
   for (const word of ["Yves", "Luca", "Alex", "dentist", "weekly notes", "SRS", "passport", "clinic"]) {
     expect(lock.text.includes(word), word).toBe(false);
   }

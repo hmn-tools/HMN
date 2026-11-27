@@ -434,11 +434,12 @@ async function route(hmn: Hmn, req: Request, ip: string | null, fingerprint: str
   }
   if (req.method === "POST" && pathname === "/api/v1/links") return json(hmn.createLink(access, await readJson(req)), 201);
 
-  const proposal = pathname.match(/^\/api\/v1\/proposals\/([^/]+)(?:\/(approve|reject|undo|clear))?$/);
+  const proposal = pathname.match(/^\/api\/v1\/proposals\/([^/]+)(?:\/(approve|reject|undo|clear|admit-kind))?$/);
   if (proposal) {
     const id = decodeURIComponent(proposal[1]!);
     const action = proposal[2];
     if (req.method === "POST" && action === "approve") return json(hmn.approve(access, id));
+    if (req.method === "POST" && action === "admit-kind") return json(hmn.admitKind(access, id, await readJson(req)));
     if (req.method === "POST" && action === "reject") return json(hmn.reject(access, id));
     if (req.method === "POST" && action === "undo") return json(hmn.undo(access, id));
     if (req.method === "POST" && action === "clear") return json(hmn.clearDecline(access, id));

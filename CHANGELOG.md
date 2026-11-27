@@ -8,7 +8,10 @@ Update the server and the iPhone app together.
 
 - An agent key with a list of allowed areas now reads only those areas. Before, it could also read every row with no area, and every area row. If one of your keys has an area list and needs rows with no area, turn on "Items with no area" on its Job card after the update (the word `none` in `allow_areas`).
 
-- A new tier, Household, between Public and Personal. The fridge, the people of the home, and your own surfaces read it. A guest agent, the lock screen, and a Public display do not.
+- Review can add a missing kind and approve, or pick a kind that already exists. Asset and place need no role. Person, event, area, and note ask for a role or none; the server never guesses. A proposal with a missing kind stays pending and shows a warning. Dates to fix is unchanged.
+- The medium home-screen widget lists overdue tasks as well as what is due today. Lock and StandBy say when nothing at Household is next, and do not use "To watch" as an empty label.
+- Lock, StandBy, and the Live Activity card read Household, so household fixtures can show as To watch. They never read Personal, Private, or Sealed, and a vault grant does not raise them. The home-screen widget stays Personal. A Public display and a guest agent stay Public.
+- A new tier, Household, between Public and Personal. The fridge, the people of the home, the owner's lock and StandBy widgets, and the owner's other surfaces read it. A guest agent and a Public display do not.
 - The fridge: a TRMNL BWRY claimed at Household shows four household screens by the time of day, in four inks. See [docs/TRMNL.md](docs/TRMNL.md).
 - Lists: a project of the kind `list` holds items. Tick an item, or bring a done one back with Again. Items stay off Today and the reviews. The evening fridge screen shows the newest list on one yellow row.
 - Family tasks: a task can be for several people, and it can have steps. The server records who completed a task, and when. A client cannot write that name.

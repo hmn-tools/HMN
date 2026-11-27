@@ -132,9 +132,9 @@ Add one tier between Public and Personal.
 
 | Tier | Who sees it | Surfaces |
 | --- | --- | --- |
-| Public | Anyone | A guest agent, the lock screen, every display. |
-| **Household** | The people who live in the home | The fridge, the phones of household members, the owner's widget and phone. |
-| Personal | The owner | The owner's phone and widget, the owner's agents. |
+| Public | Anyone | A guest agent, a Public display. |
+| **Household** | The people who live in the home | The fridge, the phones of household members, the owner's lock and StandBy widgets, the owner's home widget and phone. |
+| Personal | The owner | The owner's phone and home-screen widget, the owner's agents. |
 | Private | The owner, phone unlocked | The unlocked phone. An agent only with a grant that ends. |
 | Sealed | The owner, vault open | The vault. No agent. |
 
@@ -142,7 +142,7 @@ What changes:
 
 - The order becomes Public < Household < Personal < Private < Sealed. Every rule that compares tiers already uses the order, so the policy layer needs one new value and its place.
 - A new area default: a **Home** area (or a household area) whose items are Household. The Family area stays Private for the sensitive family things: a school report, a child's health, a hard conversation. The logistics of family life (pickup, dinner, a match) move to Household.
-- A guest key stays at Public. A household member reads Household. The fridge reads Household.
+- A guest key stays at Public. A household member reads Household. The fridge reads Household. The owner's lock and StandBy widgets read Household, so household fixtures can show there; they never read Personal, Private, or Sealed.
 - Hide on a phone still drops it to Public.
 
 The cost is real: a migration of the tier value, the order in each comparison, the tests, the app's tier chips and the Privacy screen. It is one release of work. The alternative, a "shared" flag beside the tier, gives two answers to "who may see it", and the rules then need both. One ordered tier is simpler to reason about.
@@ -172,7 +172,8 @@ The principle: **capture and glance are everywhere, decide and guard are only on
 | Surface | Person | Ceiling | Verbs |
 | --- | --- | --- | --- |
 | iPhone app, owner | The owner | Private, Sealed with the vault | All nine |
-| Widget and lock screen | The owner | Personal (widget), Public (lock screen) | Glance |
+| Home-screen widget | The owner | Personal | Glance |
+| Lock screen and StandBy | The owner | Household | Glance |
 | Share sheet, Siri, Shortcuts | The owner | (writes only) | Capture |
 | **Fridge display** | The household and visitors | **Household** | Glance |
 | **Household app** | Each household member | **Household** | Glance, capture, do, plan (lists, family tasks, household dates) |

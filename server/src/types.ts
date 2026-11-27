@@ -1,7 +1,8 @@
 /**
  * The tiers, from the most visible to the least. Household is for the people who live in the home: the fridge,
- * the phones of household members, and the owner. It is above Public, so a guest agent and the lock screen do not
- * read it, and below Personal, so each surface of the owner reads it.
+ * the phones of household members, the owner's lock and StandBy widgets, and the owner. It is above Public, so a
+ * guest agent and a Public display do not read it, and below Personal, so Personal, Private, and Sealed stay off
+ * the lock screen.
  */
 export const TIERS = ["public", "household", "personal", "private", "sealed"] as const;
 export type Tier = (typeof TIERS)[number];
@@ -34,7 +35,7 @@ export type Scope = (typeof SCOPES)[number];
 
 export const SURFACE_CEILING: Record<Surface, Tier> = {
   display: "public",
-  lock: "public",
+  lock: "household",
   widget: "personal",
   api: "personal",
   phone: "private",

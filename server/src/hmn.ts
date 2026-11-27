@@ -27,6 +27,7 @@ import {
   STATUS,
   type AreaInfo,
   type EntityView,
+  type KindAdmission,
   type ProposalSummary,
   type ProposalView,
 } from "./policy";
@@ -1231,6 +1232,54 @@ export class Hmn {
     return this.viewProposal(this.proposal(id), access);
   }
 
+  /**
+   * Add the missing kind (or retarget to a kind that exists) and approve. The proposal stays pending if this
+   * refuses or if the write still fails. The server never invents a role.
+   */
+  admitKind(access: Access, id: string, body: Record<string, unknown>) {
+    assertScope(access, "write");
+    const row = this.proposal(id);
+    if (row.status !== "pending") throw new ApiError(409, "decided", "That proposal is already decided.");
+    requireVaultFor(access, row.tier);
+    const payload = asObject(this.unpack(row.payload));
+    const shape = this.proposedShape(row, payload);
+    if (!shape) throw new ApiError(422, "no_kind", "This proposal does not name a kind.");
+    const { type, kind } = shape;
+    if (!KIND_TYPES.includes(type)) {
+      throw new ApiError(422, "fixed_kinds", "That type has a fixed set of kinds.");
+    }
+    const use = typeof body.use === "string" ? body.use : null;
+    const add = body.add === true;
+    if (use && add) throw new ApiError(422, "bad_admit", "Add a kind, or pick a kind that already exists, not both.");
+    if (!use && !add) throw new ApiError(422, "bad_admit", "Add this kind, or pick a kind that already exists.");
+    if (use) {
+      if (!this.kinds().has(type, use)) throw new ApiError(422, "bad_kind", "That kind is not valid for this type. Add the kind first.");
+      this.setProposedKind(row, payload, use);
+    } else {
+      if (!/^[a-z][a-z0-9_]{0,39}$/.test(kind)) {
+        throw new ApiError(422, "bad_kind", "A kind is lower-case letters, digits, and underscores, and it starts with a letter.");
+      }
+      const needsRole = Object.prototype.hasOwnProperty.call(ROLES, type);
+      const roleGiven = "role" in body;
+      if (needsRole && !roleGiven) {
+        throw new ApiError(422, "need_role", "Pick a role for this kind, or no role. The server does not guess.");
+      }
+      const role = roleGiven ? (body.role === null || body.role === "" ? null : String(body.role)) : null;
+      if (role !== null && !(ROLES[type] ?? []).includes(role)) {
+        throw new ApiError(422, "bad_role", "That role is not valid for this type.");
+      }
+      if (!this.kinds().has(type, kind)) {
+        this.kindSave(access, { type, kind, title: titleOf(kind), role });
+      } else if (roleGiven) {
+        const existing = this.kinds().list().find((item) => item.type === type && item.kind === kind);
+        if (existing && existing.role !== role) {
+          throw new ApiError(409, "kind_exists", "That kind is already on this type.");
+        }
+      }
+    }
+    return this.approve(access, id);
+  }
+
   /** The one write path for a proposal. The owner and the approval policy both use it, so the provenance and the history are the same. */
   private applyProposal(row: ProposalRow, access: Access, decidedBy: "owner" | "policy") {
     const id = row.id;
@@ -2274,13 +2323,14 @@ export class Hmn {
   }
 
   lockPayload(access: Access) {
+    // Surface lock is Household. A vault grant on the phone does not raise this.
     const locked = makeAccess(access.principal, "lock", false);
     const today = this.screen(locked, "today");
     return {
-      ceiling: "public" as const,
+      ceiling: "household" as const,
       due_count: today.due_count,
       next: today.next,
-      subtitle: today.next?.subtitle ?? "Nothing coming.",
+      subtitle: today.next?.subtitle ?? "Nothing for the household.",
     };
   }
 
@@ -4188,7 +4238,67 @@ export class Hmn {
       });
       shown = { ...payload, links };
     }
-    return { ...view, payload: shown, summary: this.proposalSummary(row, access, payload) };
+    const summary = this.proposalSummary(row, access, payload);
+    const kind_admission = row.status === "pending" ? this.kindAdmission(row, payload) : null;
+    return { ...view, payload: shown, summary, ...(kind_admission ? { kind_admission } : {}) };
+  }
+
+  /** The type and kind a create or a change would write. */
+  private proposedShape(row: ProposalRow, payload: Record<string, unknown>): { type: string; kind: string } | null {
+    if (row.op === "create") {
+      const entity = asObject(payload.entity);
+      const type = typeof entity.type === "string" ? entity.type : "";
+      const kind = typeof entity.kind === "string" && entity.kind ? entity.kind : "";
+      if (!type || !kind) return null;
+      return { type, kind };
+    }
+    if (row.op === "update") {
+      const patch = asObject(payload.patch);
+      const existing = typeof payload.id === "string" ? this.raw(payload.id) : null;
+      const type = existing?.type ?? row.entity_type ?? "";
+      const kind = typeof patch.kind === "string" && patch.kind ? patch.kind : existing?.kind ?? "";
+      if (!type || !kind) return null;
+      return { type, kind };
+    }
+    return null;
+  }
+
+  private setProposedKind(row: ProposalRow, payload: Record<string, unknown>, kind: string) {
+    if (row.op === "create") payload.entity = { ...asObject(payload.entity), kind };
+    else if (row.op === "update") payload.patch = { ...asObject(payload.patch), kind };
+    else throw new ApiError(422, "no_kind", "This proposal does not name a kind.");
+    const reason = this.unpackText(row.reason);
+    const readSet = this.unpack(row.read_set);
+    const stored = this.packSecret(row.tier, payload, reason, readSet);
+    this.store.db
+      .query("UPDATE proposals SET payload = ? WHERE id = ?")
+      .run(stored.payload, row.id);
+    this.store.persist();
+  }
+
+  private missingKindWarning(row: ProposalRow, payload: Record<string, unknown>, warning: string | null): string | null {
+    const admission = this.kindAdmission(row, payload);
+    if (!admission) return warning;
+    const line = `${admission.title} is not a kind of ${admission.type_title} yet. Add it before you approve, or pick a kind that is.`;
+    return warning ? `${line} ${warning}` : line;
+  }
+
+  private kindAdmission(row: ProposalRow, payload: Record<string, unknown>): KindAdmission | null {
+    const shape = this.proposedShape(row, payload);
+    if (!shape) return null;
+    const { type, kind } = shape;
+    if (!KIND_TYPES.includes(type)) return null;
+    const registry = this.kinds();
+    if (registry.has(type, kind)) return null;
+    return {
+      type,
+      type_title: type.charAt(0).toUpperCase() + type.slice(1),
+      kind,
+      title: titleOf(kind),
+      needs_role: Object.prototype.hasOwnProperty.call(ROLES, type),
+      roles: ROLES[type] ?? [],
+      existing: registry.list().filter((item) => item.type === type).map((item) => ({ kind: item.kind, title: item.title })),
+    };
   }
 
   /**
@@ -4217,6 +4327,7 @@ export class Hmn {
       lines.push({ label: "Tier", text: row.tier });
       const links = Array.isArray(payload.links) ? payload.links.map((item) => name(asObject(item).to_id)) : [];
       if (links.length) lines.push({ label: "Links", text: links.join(", ") });
+      warning = this.missingKindWarning(row, payload, warning);
       return { title: text(entity.title), lines, warning };
     }
     if (row.op === "update" || row.op === "delete") {
@@ -4252,6 +4363,7 @@ export class Hmn {
       }
       if (target?.type === "area") warning = warning ?? "This changes an area. An area sets the tier of its items.";
       if (!lines.length) lines.push({ label: "Change", text: "no field" });
+      warning = this.missingKindWarning(row, payload, warning);
       return { title: name(payload.id), lines, warning };
     }
     let link = asObject(payload.link);

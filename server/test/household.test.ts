@@ -1,5 +1,5 @@
-// The Household tier: between Public and Personal. The people of the home and the owner's own surfaces read it.
-// A guest agent, the lock screen, and a Public display do not. Each test starts its own graph.
+// The Household tier: between Public and Personal. The people of the home, the owner's lock and StandBy widgets,
+// and the owner's other surfaces read it. A guest agent and a Public display do not. Each test starts its own graph.
 import { expect, test } from "bun:test";
 import type { App } from "../src/app";
 import { handleExternal } from "../src/external/http";
@@ -35,10 +35,11 @@ test("each reader sees a Household row, or does not, by its ceiling", async () =
     const mine = await note(app, "Example personal plan", { tier: "personal" });
     const read = (key: string, surface: string, id: string) => call(app, `/api/v1/note/${id}`, { key, surface });
 
-    // The owner's phone and widget read it. The lock screen and a Public display do not.
+    // The owner's phone, widget, and lock screen read it. A Public display does not.
     expect((await read(app.secrets!.owner, "phone", home)).status).toBe(200);
     expect((await read(app.secrets!.owner, "widget", home)).status).toBe(200);
-    expect((await read(app.secrets!.owner, "lock", home)).status).toBe(404);
+    expect((await read(app.secrets!.owner, "lock", home)).status).toBe(200);
+    expect((await read(app.secrets!.owner, "lock", mine)).status).toBe(404);
     expect((await read(app.secrets!.owner, "display", home)).status).toBe(404);
     // The display key of the first boot is Public.
     expect((await read(app.secrets!.display, "api", home)).status).toBe(404);
@@ -113,6 +114,36 @@ test("a capture tagged #household, and an item in a Household area, are Househol
     const filed = await note(app, "Example chore list", { area_id: areaId });
     const got = (await call(app, `/api/v1/note/${filed}`, owner(app))).json as { tier: string; tier_source: string };
     expect(got).toMatchObject({ tier: "household", tier_source: "area" });
+  } finally {
+    app.close();
+  }
+});
+
+test("a household fixture shows on the lock screen, and a personal one does not", async () => {
+  const app = testApp();
+  try {
+    const fixture = (title: string, tier: string) =>
+      call(app, "/api/v1/event", {
+        method: "POST",
+        ...owner(app),
+        body: { title, kind: "fixture", status: "upcoming", tier, due_at: "2026-11-11T10:00:00.000Z" },
+      });
+    expect((await fixture("Example school match", "household")).status).toBe(201);
+    expect((await call(app, "/api/v1/event", {
+      method: "POST",
+      ...owner(app),
+      body: { title: "Example private rehearsal", kind: "fixture", status: "upcoming", tier: "personal", due_at: "2026-11-11T09:00:00.000Z" },
+    })).status).toBe(201);
+    const lock = await call(app, "/api/v1/screens/lock", { ...owner(app), surface: "lock" });
+    expect(lock.status).toBe(200);
+    const body = lock.json as { ceiling: string; next: { title: string } | null; subtitle: string };
+    expect(body.ceiling).toBe("household");
+    expect(JSON.stringify(lock.json)).toContain("Example school match");
+    expect(JSON.stringify(lock.json)).not.toContain("Example private rehearsal");
+    expect(body.next?.title).toBe("Example school match");
+    const display = await call(app, "/api/v1/screens/today", { key: app.secrets!.display, surface: "display" });
+    expect(JSON.stringify(display.json)).not.toContain("Example school match");
+    expect(JSON.stringify(display.json)).not.toContain("Example private rehearsal");
   } finally {
     app.close();
   }

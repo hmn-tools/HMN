@@ -145,6 +145,8 @@ struct Proposal: Codable, Identifiable {
     var expiresOn: String?
     /** What an approval writes. The server makes it from the graph, not from the words of the source. */
     var summary: ProposalSummary?
+    /** Present when the kind is not on this type yet. */
+    var kindAdmission: KindAdmission?
 }
 
 struct ProposalSummary: Codable {
@@ -157,6 +159,22 @@ struct ProposalSummary: Codable {
         var text: String
         /** The value now, for a change that waits. */
         var was: String?
+    }
+}
+
+/** A pending proposal names a kind this type does not have yet. The owner adds it, or picks one that exists. */
+struct KindAdmission: Codable {
+    var type: String
+    var typeTitle: String
+    var kind: String
+    var title: String
+    var needsRole: Bool
+    var roles: [String]
+    var existing: [KindOption]
+    struct KindOption: Codable, Identifiable {
+        var kind: String
+        var title: String
+        var id: String { kind }
     }
 }
 

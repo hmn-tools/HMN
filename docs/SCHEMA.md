@@ -372,7 +372,8 @@ One rule gives the ceiling of each agent key, local or outside (`agentCeiling` i
 | `max_tier` is `public`, or `forced_ceiling` is `public` | Public |
 | All other keys | Personal |
 | `private_until` is later than now, and the key is not held at Public | Private |
-| The display or the lock surface | Public |
+| The display surface | Public |
+| The lock surface | Household, and never Personal, Private, or Sealed |
 
 Nothing gives Sealed: not the vault mark, not a tier in the row, not a vault grant, and not the surface that the caller names.
 
@@ -562,10 +563,11 @@ A member's phone writes with the same routes as the owner (`POST /api/v1/:type`,
 | `GET /api/v1/access/:id/scope` | write, owner only | What one agent key can see now: the ceiling, the total, counts by type and by area, and what stays closed. Counts only, with no row title. |
 | `GET /api/v1/access/:id/today` | write, owner only | The Today screen as that key gets it on the MCP surface. It adds no row to the read log of the key. |
 | `GET /api/v1/access/:id/timeline?limit=` | write, owner only | What the key did, newest first, at most 200: reads, proposals, and requests. Each search or view is one line. It has the summary counts of proposals and open requests. |
-| `GET /api/v1/proposals?status=pending` | read, write, agent | Pending by default. Each entry in `payload.links` has a `title` when the caller can see the linked row. A row that the caller cannot see has no `title`. |
+| `GET /api/v1/proposals?status=pending` | read, write, agent | Pending by default. Each entry in `payload.links` has a `title` when the caller can see the linked row. A row that the caller cannot see has no `title`. A pending create or change that names a kind the type does not have yet has `kind_admission` and a warning in `summary`. |
 | `POST /api/v1/proposals` | write, agent | Create a proposal. An `idempotency_key` in the body, or an `Idempotency-Key` header, makes a retry return the first proposal with 200. |
 | `PATCH /api/v1/proposals/:id` | write | Edit a pending proposal's title, due date, or reason. |
-| `POST /api/v1/proposals/:id/approve` | write | Apply it. |
+| `POST /api/v1/proposals/:id/approve` | write | Apply it. A missing kind is `422 bad_kind`; the proposal stays pending. |
+| `POST /api/v1/proposals/:id/admit-kind` | write | `{ add: true }` adds the missing kind with no role, then approves: enough for an asset or a place. For a person, event, area, or note, `{ add: true, role }` is required, and `role` may be `null` for no role. The server never guesses a role. `{ use: "<kind>" }` retargets to a kind that already exists, then approves. |
 | `POST /api/v1/proposals/:id/reject` | write | Reject it. |
 | `POST /api/v1/proposals/:id/undo` | write | Undo an applied proposal. A create is removed, an update goes back one version, a removal comes back, and a link change is reversed. |
 | `POST /api/v1/proposals/:id/clear` | write | Forget a decline, an expiry, or an undo, so that the worker can propose the item again. |
@@ -583,6 +585,7 @@ A member's phone writes with the same routes as the owner (`POST /api/v1/:type`,
 | `GET /api/v1/free-busy?from=&to=` | write, agent with the permission | The times in which the owner is busy. See "Busy times". |
 | `GET /api/v1/screens` | read, write, agent | The deck. |
 | `GET /api/v1/screens/today` | read, write, agent | Today as JSON. |
+| `GET /api/v1/screens/lock` | read, write, agent | The lock and StandBy card: Household `ceiling`, `due_count`, `next`, and `subtitle`. Never Personal, Private, or Sealed. A vault grant does not raise it. |
 | `GET /api/v1/screens/:id` | read, write, agent | `ready: false` for screens not yet rendered. |
 | `GET /api/display` | read, write, agent | TRMNL-style JSON. `image_url`, `filename`, `refresh_rate`, `reset_firmware`, `screen`. A request that sends the device `ID` header is answered in the BYOS shape from [TRMNL.md](TRMNL.md), still at Public. |
 | `GET /api/setup` | none | TRMNL setup. Trades a MAC address for a device key after the owner claims it. No graph data. |

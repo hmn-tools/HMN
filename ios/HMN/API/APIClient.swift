@@ -325,6 +325,17 @@ final class APIClient: NSObject, URLSessionDelegate {
     func approve(_ id: String) async throws -> Proposal {
         try await send("/api/v1/proposals/\(try Path.segment(id))/approve", method: "POST", surface: "phone")
     }
+    /// Add the missing kind (or retarget to a kind that exists) and approve. `role` is required when the type has roles: pass an empty string for no role.
+    func admitKind(_ id: String, add: Bool, role: String? = nil, use: String? = nil) async throws -> Proposal {
+        var body: [String: Any] = [:]
+        if let use, !use.isEmpty {
+            body["use"] = use
+        } else {
+            body["add"] = true
+            if let role { body["role"] = role.isEmpty ? NSNull() : role }
+        }
+        return try await sendJSON("/api/v1/proposals/\(try Path.segment(id))/admit-kind", method: "POST", surface: "phone", body: body)
+    }
     func reject(_ id: String) async throws -> Proposal {
         try await send("/api/v1/proposals/\(try Path.segment(id))/reject", method: "POST", surface: "phone")
     }

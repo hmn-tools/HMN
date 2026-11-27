@@ -18,6 +18,11 @@ struct AgentsView: View {
     @State private var decided: Decided?
     /// The last decision on a list from Review all. Its approvals can be taken back together.
     @State private var batch: BatchOutcome?
+    /// For a missing kind that needs a role: empty until the owner picks a role or "No role".
+    @State private var admitRole = ""
+    @State private var rolePicked = false
+    /// An existing kind to use instead of adding the proposed one. Empty means add.
+    @State private var useKind = ""
 
     /// The last decision on this screen.
     private struct Decided {
@@ -51,13 +56,8 @@ struct AgentsView: View {
                     .card(padding: 20)
                 } else if let proposal = current {
                     proposalCard(proposal)
-                    HStack(spacing: 10) {
-                        Button("Decline") { Task { await decide(proposal, approve: false) } }
-                            .buttonStyle(PillButtonStyle(kind: .secondary))
-                        Button("Approve") { Task { await decide(proposal, approve: true) } }
-                            .buttonStyle(PillButtonStyle())
-                    }
-                    .disabled(working)
+                    decisionButtons(proposal)
+                        .disabled(working)
                 } else if loaded {
                     EmptyState(title: "All clear.", text: "A new proposal shows here.")
                 } else {
@@ -107,6 +107,11 @@ struct AgentsView: View {
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { Task { await reload() } }
         .refreshable { await reload() }
+        .onChange(of: current?.id) { _, _ in
+            admitRole = ""
+            rolePicked = false
+            useKind = ""
+        }
         .sheet(isPresented: $editing) { editSheet.themed() }
     }
 
@@ -349,6 +354,98 @@ struct AgentsView: View {
         message = failed == 0 ? nil : "\(failed) could not be taken back. Activity has each one."
         await reload()
         await session.refreshToday()
+    }
+
+    @ViewBuilder
+    private func decisionButtons(_ proposal: Proposal) -> some View {
+        if let admission = proposal.kindAdmission {
+            VStack(alignment: .leading, spacing: 10) {
+                if admission.needsRole && useKind.isEmpty {
+                    admissionPicker(
+                        "Role",
+                        selection: Binding(
+                            get: { rolePicked ? admitRole : "__unset__" },
+                            set: { if $0 != "__unset__" { admitRole = $0; rolePicked = true } }
+                        ),
+                        options: [("", "No role")] + admission.roles.map { ($0, Words.id($0)) },
+                        unset: "Pick a role, or no role"
+                    )
+                }
+                if !admission.existing.isEmpty {
+                    admissionPicker(
+                        "Or use",
+                        selection: $useKind,
+                        options: [("", "Add \(admission.title)")] + admission.existing.map { ($0.kind, $0.title) },
+                        unset: nil
+                    )
+                }
+                HStack(spacing: 10) {
+                    Button("Decline") { Task { await decide(proposal, approve: false) } }
+                        .buttonStyle(PillButtonStyle(kind: .secondary))
+                    if canAdmit(admission) {
+                        Button(admitLabel(admission)) { Task { await admit(proposal, admission) } }
+                            .buttonStyle(PillButtonStyle())
+                    }
+                }
+                if admission.needsRole && useKind.isEmpty && !rolePicked {
+                    Text("Pick a role, or no role, to add this kind. The app does not guess.")
+                        .font(Theme.small)
+                        .foregroundStyle(Theme.stone)
+                }
+            }
+        } else {
+            HStack(spacing: 10) {
+                Button("Decline") { Task { await decide(proposal, approve: false) } }
+                    .buttonStyle(PillButtonStyle(kind: .secondary))
+                Button("Approve") { Task { await decide(proposal, approve: true) } }
+                    .buttonStyle(PillButtonStyle())
+            }
+        }
+    }
+
+    private func canAdmit(_ admission: KindAdmission) -> Bool {
+        !useKind.isEmpty || !admission.needsRole || rolePicked
+    }
+
+    private func admitLabel(_ admission: KindAdmission) -> String {
+        if !useKind.isEmpty {
+            let title = admission.existing.first { $0.kind == useKind }?.title ?? Words.id(useKind)
+            return "Use \(title) and approve"
+        }
+        return "Add \(admission.title) to \(admission.typeTitle) and approve"
+    }
+
+    private func admissionPicker(_ label: String, selection: Binding<String>, options: [(String, String)], unset: String?) -> some View {
+        HStack {
+            Text(label.uppercased()).font(Theme.font(10)).foregroundStyle(Theme.stone)
+            Spacer()
+            Picker(label, selection: selection) {
+                if let unset, !rolePicked && useKind.isEmpty && label == "Role" {
+                    Text(unset).tag("__unset__")
+                }
+                ForEach(options, id: \.0) { option in Text(option.1).tag(option.0) }
+            }
+            .tint(Theme.ink)
+        }
+    }
+
+    private func admit(_ proposal: Proposal, _ admission: KindAdmission) async {
+        working = true
+        message = nil
+        do {
+            if useKind.isEmpty {
+                let role: String? = admission.needsRole ? admitRole : nil
+                _ = try await session.client().admitKind(proposal.id, add: true, role: role)
+            } else {
+                _ = try await session.client().admitKind(proposal.id, add: false, use: useKind)
+            }
+            decided = Decided(id: proposal.id, title: proposal.summary?.title ?? proposal.payload?.entity?.title ?? ReviewText.operation(proposal.op), approved: true)
+            await reload()
+        } catch is CancellationError {
+        } catch {
+            message = error.localizedDescription
+        }
+        working = false
     }
 
     private func decide(_ proposal: Proposal, approve: Bool) async {

@@ -103,7 +103,9 @@ function parseList(value: string | null): string[] {
 export function resolveCeiling(principal: Principal, surface: Surface, grant: boolean): Tier {
   if (principal.scope === "agent") return agentCeiling(principal, surface);
   let cap = looser(principal.maxTier, SURFACE_CEILING[surface]);
-  if (surface === "display" || surface === "lock") cap = "public";
+  if (surface === "display") cap = "public";
+  // Lock and StandBy read Household so household fixtures can show there. They never rise to Personal.
+  if (surface === "lock") cap = looser(cap, "household");
   if (surface === "widget") cap = looser(cap, "personal");
   if (surface === "mcp" || principal.scope === "agent") cap = looser(cap, principal.maxTier);
   if (grant && principal.vault && (surface === "phone" || surface === "mcp")) {
@@ -124,7 +126,8 @@ function agentCeiling(principal: Principal, surface: Surface): Tier {
   // A key made at Public or Household stays there. Each other key starts at Personal.
   let cap: Tier = principal.forcedCeiling === "public" ? "public" : principal.maxTier === "public" || principal.maxTier === "household" ? principal.maxTier : "personal";
   if (cap === "personal" && principal.privateGrant) cap = "private";
-  if (surface === "display" || surface === "lock") cap = "public";
+  if (surface === "display") cap = "public";
+  if (surface === "lock") cap = looser(cap, "household");
   if (surface === "widget") cap = looser(cap, "personal");
   return cap;
 }
@@ -355,6 +358,20 @@ export type ProposalView = {
   source?: string;
   decided_by?: string | null;
   summary?: ProposalSummary;
+  /** Set when a pending create or change names a kind that this type does not have yet. */
+  kind_admission?: KindAdmission;
+};
+
+/** How the owner can admit a missing kind and approve, or pick a kind that already exists. */
+export type KindAdmission = {
+  type: string;
+  type_title: string;
+  kind: string;
+  title: string;
+  /** True for person, event, area, and note: the owner must choose a role or none. */
+  needs_role: boolean;
+  roles: string[];
+  existing: Array<{ kind: string; title: string }>;
 };
 
 export function projectProposal(row: ProposalRow, access: Access, sealedKey: Buffer): ProposalView | null {

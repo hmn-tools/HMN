@@ -169,7 +169,9 @@ struct HMNWidgetView: View {
     }
 
     private func medium(_ screen: WidgetScreen) -> some View {
-        let all = screen.sections.first { $0.id == "due" }?.items ?? []
+        let overdue = screen.sections.first { $0.id == "overdue" }?.items ?? []
+        let dueToday = screen.sections.first { $0.id == "due" }?.items ?? []
+        let all = overdue + dueToday
         let due = all.prefix(3)
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -243,8 +245,9 @@ struct LockWidgetView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
-        let title = entry.card?.title ?? "HMN"
-        let subtitle = entry.card?.subtitle ?? "Open HMN"
+        let hasNext = entry.card?.title.isEmpty == false
+        let title = hasNext ? entry.card!.title : "HMN"
+        let subtitle = hasNext ? (entry.card?.subtitle ?? "") : (entry.card?.subtitle.isEmpty == false ? entry.card!.subtitle : "Nothing for the household.")
         Group {
             if family == .accessoryInline {
                 Text(title)
@@ -268,11 +271,18 @@ struct StandByWidgetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TO WATCH").font(WidgetFont.label).foregroundStyle(WidgetColor.stone)
-            Text(entry.card?.title.isEmpty == false ? entry.card!.title : "Nothing coming.")
-                .font(WidgetFont.sans(22, .semibold))
-                .foregroundStyle(WidgetColor.ink)
-            Text(entry.card?.subtitle ?? "").font(WidgetFont.small).foregroundStyle(WidgetColor.stone)
+            if let title = entry.card?.title, !title.isEmpty {
+                Text("TO WATCH").font(WidgetFont.label).foregroundStyle(WidgetColor.stone)
+                Text(title)
+                    .font(WidgetFont.sans(22, .semibold))
+                    .foregroundStyle(WidgetColor.ink)
+                Text(entry.card?.subtitle ?? "").font(WidgetFont.small).foregroundStyle(WidgetColor.stone)
+            } else {
+                Text("HOUSEHOLD").font(WidgetFont.label).foregroundStyle(WidgetColor.stone)
+                Text(entry.card?.subtitle.isEmpty == false ? entry.card!.subtitle : "Nothing for the household.")
+                    .font(WidgetFont.sans(22, .semibold))
+                    .foregroundStyle(WidgetColor.ink)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .padding(16)

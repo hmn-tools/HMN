@@ -77,8 +77,8 @@ Every entity has one effective tier. A property may be stricter than its entity.
 | Tier | Meaning |
 | --- | --- |
 | Public | Fine on a shared or e-ink display, a lock screen, a widget, and the phone. |
-| Household | The people who live in the home: the fridge, the phones of household members, and the owner's own surfaces. Not a guest agent, not the lock screen, not a Public display. |
-| Personal | Default. The owner's own phone and widgets. Not the shared display, not the lock screen. |
+| Household | The people who live in the home: the fridge, the phones of household members, the owner's lock and StandBy widgets, and the owner's other surfaces. Not a guest agent, not a Public display. |
+| Personal | Default. The owner's own phone and home-screen widget. Not the shared display, not the lock screen. |
 | Private | The phone only after it is unlocked. Never a widget, a lock screen, or `/api/display`. Family defaults here. |
 | Sealed | Encrypted as fields, not only as part of the database file. Hidden until the owner opens the vault for this session. Agents and MCP do not receive it unless the owner grants that one request. Health, money, and identity documents default here. |
 
@@ -90,7 +90,8 @@ Enforcement is one policy layer on the server. Handlers, MCP, the renderer, and 
 
 | Surface | Ceiling |
 | --- | --- |
-| Shared display (`/api/display`) and the lock screen | Public |
+| Shared display (`/api/display`) | Public |
+| Lock screen and StandBy | Household |
 | Home-screen widget | Personal |
 | Phone, unlocked | Private |
 | Vault lens on the phone, after a biometric prompt and a short-lived grant | Sealed |
@@ -148,7 +149,7 @@ The data model and the owner loop. This is the product, not a demo graph.
 
 - Areas, people, goals, projects, tasks, notes, events, places, assets, sources. Habits are accepted by the API. A habit for a child is a routine, with a screen on the member's phone and on the fridge.
 - Typed links between any two records. Flexible properties. Provenance. Soft delete.
-- Privacy tiers on every entity, inheritance from areas, stricter-of-sources for links and proposals, and one policy layer. Display and lock screen are Public. Widgets are Personal. The unlocked phone is Private. The vault is Sealed and per request.
+- Privacy tiers on every entity, inheritance from areas, stricter-of-sources for links and proposals, and one policy layer. A Public display stays Public. Lock screen and StandBy are Household. The home-screen widget is Personal. The unlocked phone is Private. The vault is Sealed and per request.
 - Field-level encryption for Sealed values, and an encrypted database file at rest. Keys in the macOS Keychain on the mini, not in the repo.
 - TLS everywhere, device pairing, per-device keys with revocation, hashed credentials, expiry, rotation, rate limit and lockout.
 - A hash-chained audit log of Private and Sealed reads and writes, and of security events, viewable in the app.
