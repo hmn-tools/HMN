@@ -181,11 +181,13 @@ final class Session: ObservableObject {
             today = phone
             SnapshotStore.savePhone(phone)
             noteReach(nil)
-            let widget = try await client().today(surface: "widget")
-            SnapshotStore.save(widget)
         } catch {
             noteReach(error)
+            await refreshWaiting()
+            return
         }
+        // The widget's copy is extra. Its failure does not put an offline card over a fresh day.
+        if let widget = try? await client().today(surface: "widget") { SnapshotStore.save(widget) }
         await refreshWaiting()
     }
 

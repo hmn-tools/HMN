@@ -523,6 +523,8 @@ struct TodayView: View {
                 let tip = try await session.client().auditTip()
                 try? KeychainStore.saveAuditTip(tip.hash)
                 try? KeychainStore.saveAuditPin(pin)
+                // Not silent: a new certificate is a new start for the check, and the owner should know it.
+                note = "Your HMN has a new certificate. The check of its audit log starts again from now."
             } else if !session.auditAlarm {
                 if let previous = KeychainStore.loadAuditTip() {
                     let check = try await session.client().checkAuditTip(previous)

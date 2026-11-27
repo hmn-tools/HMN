@@ -1007,7 +1007,7 @@ export class Hmn {
   /** What a client needs to show and edit any row: the statuses, the kinds, the relations, and the typed fields. */
   schema(access: Access) {
     // Only the owner sees how many rows use each kind. Another key gets the shape alone.
-    if (access.principal.scope !== "write") return this.schemaForAgent();
+    if (access.principal.scope !== "write") return this.schemaForAgent(access);
     return { statuses: STATUS, kinds: this.kindsList(access).kinds, relations: RELATIONS, fields: FIELDS, kind_fields: kindFieldList(this.store.db), field_types: FIELD_TYPES };
   }
 
@@ -1015,7 +1015,11 @@ export class Hmn {
    * The shape of the record for an agent: the statuses, the kinds with their titles, the relations, and the typed
    * fields. No counts and no rows, so a read key learns nothing about the owner's data from it.
    */
-  schemaForAgent() {
+  schemaForAgent(access: Access) {
+    // The names of the kinds and of their fields are the owner's words. A key of the owner's own agents reads them,
+    // so it can propose a row of a kind. A guest, an outside client, a view key, and a hidden key read the shape only.
+    const own = access.principal.scope === "agent" && !access.principal.external && !access.principal.guest && !access.principal.member && !access.principal.forcedCeiling;
+    if (!own) return { statuses: STATUS, kinds: [], relations: RELATIONS, fields: FIELDS, kind_fields: [], field_types: FIELD_TYPES };
     const kinds = this.kinds().list().map((row) => ({ type: row.type, kind: row.kind, title: row.title, role: row.role }));
     return { statuses: STATUS, kinds, relations: RELATIONS, fields: FIELDS, kind_fields: kindFieldList(this.store.db), field_types: FIELD_TYPES };
   }
@@ -1413,6 +1417,10 @@ export class Hmn {
   /** Write an earlier version back as a new head version. Nothing is removed from history. */
   private restoreVersion(access: Access, existing: EntityRow, previous: VersionRow) {
     const areas = this.areaMap();
+    // An area that is gone cannot give its tier. The row would come back less private than it was, so it stays.
+    if (previous.area_id && !areas.has(previous.area_id)) {
+      throw new ApiError(409, "area_gone", "Its area was removed. Make the area again, or move the item by hand.");
+    }
     assertCanSeeTier(access, ownTier(existing, areas).tier);
     const declared = previous.tier && isTier(previous.tier) ? previous.tier : null;
     assertCanSeeTier(access, ownTier({ type: previous.type, tier: declared, area_id: previous.area_id }, areas).tier);
@@ -1873,7 +1881,10 @@ export class Hmn {
    */
   agentRequest(access: Access, body: Record<string, unknown>) {
     if (access.principal.member) throw new ApiError(403, "forbidden", "Tell the owner in person.");
-    if (access.principal.scope === "read") throw new ApiError(403, "forbidden", "This credential cannot send a request.");
+    // A guest or an outside client may propose an event or an inbox item only. It cannot add to this list.
+    if (access.principal.scope === "read" || access.principal.external || access.principal.guest) {
+      throw new ApiError(403, "forbidden", "This credential cannot send a request.");
+    }
     assertNotHidden(access);
     const result = fileRequest(this.store.db, this.now(), access.principal.id, access.principal.name, body);
     this.appendAudit({ actor: access.principal.id, action: "agent_request", tier: null, entity_type: "request", entity_id: result.id, surface: access.surface });
@@ -1888,11 +1899,14 @@ export class Hmn {
 
   agentRequests(access: Access, status: string | null) {
     assertScope(access, "write");
+    // A request can quote what an agent read. A hidden phone shows Public only, so it shows no request.
+    assertNotHidden(access);
     return { requests: listRequests(this.store.db, status) };
   }
 
   agentRequestSet(access: Access, id: string, body: Record<string, unknown>) {
     assertScope(access, "write");
+    assertNotHidden(access);
     const row = setRequestStatus(this.store.db, this.now(), id, body.status);
     this.appendAudit({ actor: access.principal.id, action: "agent_request_status", tier: null, entity_type: "request", entity_id: id, surface: access.surface });
     this.store.persist();
@@ -3709,6 +3723,7 @@ export class Hmn {
     const areas = this.areaMap();
     if (existing) this.assertCanChange(access, existing, input, areas);
     const areaId = "area_id" in input ? (input.area_id as string | null) : existing?.area_id ?? null;
+    if ("area_id" in input && areaId !== null && !areas.has(areaId)) throw new ApiError(422, "bad_area", "That area is not in your HMN.");
     const declared = "tier" in input ? (input.tier as Tier | null) : existing?.tier ?? null;
     if (declared && !isTier(declared) && declared !== null) throw new ApiError(422, "bad_tier", "Unknown tier.");
     const floor = ownTier({ type, tier: null, area_id: areaId }, areas).tier;

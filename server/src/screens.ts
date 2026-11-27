@@ -1,4 +1,4 @@
-import { calendarDays, daysLate, dueDateKey, eventOver, greetingWord, hasClock, plusHour, zoned } from "./time";
+import { calendarDays, daysLate, dueDateKey, eventOver, greetingWord, hasClock, keyDays, plusHour, zoned } from "./time";
 import { dueOn, routineDays, routinePeople } from "./routines";
 import type { EntityView, LinkView, Surface, Tier } from "./types";
 import { LEGACY_ROLES, type RoleSets } from "./kinds";
@@ -143,7 +143,7 @@ function assemble(
   const family = [...views.values()]
     .filter((entity) => entity.type === "event" && isKind(entity, roles.familyEvent) && !eventOver(entity, now, timeZone))
     // The next seven days. A date further out is on Upcoming.
-    .filter((entity) => withinDays(entity.due_at!, now, timeZone, 7))
+    .filter((entity) => eventWithin(entity.due_at!, now, timeZone, 7))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   // Today's events from a mirrored calendar that are not over, with an event of several days that covers today.
   const calendar = [...views.values()]
@@ -452,11 +452,18 @@ function eventItem(event: EntityView, links: SourcedLink[], timeZone: string, fi
   };
 }
 
+/** A day from today to today plus `days`, in the owner's zone. */
 function withinDays(due: string, now: Date, timeZone: string, days: number): boolean {
-  const today = zoned(now, timeZone).dateKey;
-  const key = dueDateKey(due, timeZone);
-  const delta = calendarDays(`${today}T00:00:00.000Z`, new Date(`${key}T12:00:00Z`), timeZone);
+  const delta = keyDays(zoned(now, timeZone).dateKey, dueDateKey(due, timeZone));
   return delta >= 0 && delta <= days;
+}
+
+/**
+ * An event that is not over and starts by today plus `days`. An event of several days that started before today
+ * and is not over is in the window too: it is still on. The caller has left out the events that are over.
+ */
+function eventWithin(due: string, now: Date, timeZone: string, days: number): boolean {
+  return keyDays(zoned(now, timeZone).dateKey, dueDateKey(due, timeZone)) <= days;
 }
 
 export function buildUpcoming(input: ScreenInput): TodayScreen {
@@ -466,10 +473,10 @@ export function buildUpcoming(input: ScreenInput): TodayScreen {
   void today;
   // The next two weeks. An event that is over, or cancelled, is not coming.
   const family = [...views.values()]
-    .filter((entity) => entity.type === "event" && isKind(entity, roles.familyEvent) && !eventOver(entity, now, timeZone) && withinDays(entity.due_at!, now, timeZone, UPCOMING_DAYS))
+    .filter((entity) => entity.type === "event" && isKind(entity, roles.familyEvent) && !eventOver(entity, now, timeZone) && eventWithin(entity.due_at!, now, timeZone, UPCOMING_DAYS))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   const fixtures = [...views.values()]
-    .filter((entity) => entity.type === "event" && isKind(entity, roles.fixtureEvent) && !eventOver(entity, now, timeZone, true) && withinDays(entity.due_at!, now, timeZone, UPCOMING_DAYS))
+    .filter((entity) => entity.type === "event" && isKind(entity, roles.fixtureEvent) && !eventOver(entity, now, timeZone, true) && eventWithin(entity.due_at!, now, timeZone, UPCOMING_DAYS))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   const sections: ScreenSection[] = [];
   const capped = (list: EntityView[], max: number) => (list.length > max ? { trailing: `${max} of ${list.length}` } : {});
@@ -574,13 +581,13 @@ export function buildWeek(input: ScreenInput): TodayScreen {
       entity.type === "event" &&
       (isKind(entity, roles.familyEvent) || isKind(entity, roles.fixtureEvent)) &&
       !eventOver(entity, now, timeZone, isKind(entity, roles.fixtureEvent)) &&
-      withinDays(entity.due_at!, now, timeZone, 7),
+      eventWithin(entity.due_at!, now, timeZone, 7),
   );
   // The mirrored events of the next seven days. A family date and a fixture are in `dates`.
   const calendar = [...views.values()]
     .filter((entity) => entity.type === "event" && entity.properties.mirror === true && !eventOver(entity, now, timeZone))
     .filter((entity) => !isKind(entity, roles.familyEvent) && !isKind(entity, roles.fixtureEvent))
-    .filter((entity) => withinDays(entity.due_at!, now, timeZone, 7))
+    .filter((entity) => eventWithin(entity.due_at!, now, timeZone, 7))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   const quiet = [...views.values()].filter((entity) => isTaskRow(entity) && entity.status === "open" && !entity.due_at && calendarDays(entity.updated_at, now, timeZone) >= 14);
   const goals = [...views.values()].filter((entity) => entity.type === "goal" && entity.status === "active");

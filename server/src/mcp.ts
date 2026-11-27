@@ -115,7 +115,7 @@ function callTool(hmn: Hmn, access: Access, name: string, args: Record<string, u
   }
   if (name === "list_proposals") return { proposals: hmn.listProposals(access, typeof args.status === "string" ? args.status : null) };
   if (name === "proposal_status") return hmn.proposalStatus(access, String(args.id ?? ""));
-  if (name === "describe_schema") return hmn.schemaForAgent();
+  if (name === "describe_schema") return hmn.schemaForAgent(access);
   if (name === "request_feature") return hmn.agentRequest(access, args);
   if (name === "my_requests") return hmn.myRequests(access);
   if (name === "capture_inbox") return hmn.captureInbox(access, { text: String(args.text ?? ""), url: args.url, source: "mcp" });

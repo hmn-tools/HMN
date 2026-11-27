@@ -56,8 +56,8 @@ final class APIClient: NSObject, URLSessionDelegate {
     private let lock = NSLock()
     private var cachedSession: URLSession?
     private var inFlight = 0
-    /// Set when the pin refused the server's certificate, so the failed request says why.
-    private var pinRefused = false
+    /// How many requests the pin refused that have not yet said why. A count, so two refusals at once both say so.
+    private var pinRefused = 0
 
     private func beginRequest() -> URLSession {
         lock.lock(); defer { lock.unlock() }
@@ -82,9 +82,9 @@ final class APIClient: NSObject, URLSessionDelegate {
 
     private func takePinRefused() -> Bool {
         lock.lock(); defer { lock.unlock() }
-        let value = pinRefused
-        pinRefused = false
-        return value
+        guard pinRefused > 0 else { return false }
+        pinRefused -= 1
+        return true
     }
 
     /// Ends the session of this client after its running requests finish. A later request makes a new session.
@@ -500,7 +500,7 @@ final class APIClient: NSObject, URLSessionDelegate {
         let der = SecCertificateCopyData(leaf) as Data
         let digest = SHA256.hash(data: der).map { String(format: "%02x", $0) }.joined()
         guard !fingerprint.isEmpty, digest == fingerprint.lowercased() else {
-            lock.lock(); pinRefused = true; lock.unlock()
+            lock.lock(); pinRefused += 1; lock.unlock()
             return (.cancelAuthenticationChallenge, nil)
         }
         return (.useCredential, URLCredential(trust: trust))

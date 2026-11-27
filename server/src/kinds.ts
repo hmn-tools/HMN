@@ -108,6 +108,13 @@ export function ensureKindTables(db: Database) {
   db.query("INSERT OR IGNORE INTO meta (key, value) VALUES ('kinds_note', '1')").run();
   db.query("INSERT OR IGNORE INTO meta (key, value) VALUES ('kinds_document', '1')").run();
   // A graph from before this table: keep each kind that a row already uses, so that no row becomes invalid.
+  keepUsedKinds(db);
+  db.query("INSERT OR IGNORE INTO meta (key, value) VALUES ('kinds_used_v2', '1')").run();
+}
+
+/** Each kind that a row uses and the table does not have is added, with its name as its title. */
+function keepUsedKinds(db: Database) {
+  if (!db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'entities'").get()) return;
   const used = db
     .query(`SELECT DISTINCT type, kind FROM entities WHERE kind IS NOT NULL AND type IN (${KIND_TYPES.map(() => "?").join(",")})`)
     .all(...KIND_TYPES) as Array<{ type: string; kind: string }>;
@@ -131,6 +138,12 @@ function addedKinds(db: Database) {
     seedKinds(db, DEFAULT_KINDS.filter((row) => row[0] === "note"));
     noteKindsFromProperties(db);
     db.query("INSERT INTO meta (key, value) VALUES ('kinds_note', '1')").run();
+  }
+  // Notes became a type with kinds on 2026-11-27. A row that already used a kind that the table does not have
+  // keeps it: the kind is added with its own name, so the row can still be saved.
+  if (!db.query("SELECT 1 FROM meta WHERE key = 'kinds_used_v2'").get()) {
+    keepUsedKinds(db);
+    db.query("INSERT INTO meta (key, value) VALUES ('kinds_used_v2', '1')").run();
   }
   // The asset kind `document` came on 2026-11-27: a passport, a licence, a policy. Its fields are in fields.ts.
   if (!db.query("SELECT 1 FROM meta WHERE key = 'kinds_document'").get()) {

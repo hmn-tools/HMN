@@ -66,8 +66,24 @@ export function plusHour(hm: string): string {
 /** A `due_at` that HMN can read: a date (YYYY-MM-DD) or a full instant. A screen skips any other value. */
 export function readableDue(value: unknown): value is string {
   if (typeof value !== "string") return false;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+  // The day must be a real day: 2026-02-31 would roll over to 3 March, so it is refused.
+  if (!realDay(value.slice(0, 10))) return false;
+  if (value.length === 10) return true;
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) && !Number.isNaN(Date.parse(value));
+}
+
+/** True for a YYYY-MM-DD that names a day of the calendar. */
+export function realDay(key: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (!match) return false;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+/** The days from one date key to another, by the calendar alone. No zone can move either day. */
+export function keyDays(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
 
 /** The day after a date key. */

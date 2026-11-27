@@ -67,6 +67,24 @@ struct RecordView: View {
         var dueHasTime = false
         var fields: [String: String] = [:]
         var childTier = ""
+
+        /// Keep each value that the owner changed since `old`, on top of the server's `new` record.
+        static func rebase(_ draft: Draft, from old: Draft, onto new: Draft) -> Draft {
+            var out = new
+            if draft.title != old.title { out.title = draft.title }
+            if draft.body != old.body { out.body = draft.body }
+            if draft.status != old.status { out.status = draft.status }
+            if draft.kind != old.kind { out.kind = draft.kind }
+            if draft.areaId != old.areaId { out.areaId = draft.areaId }
+            if draft.childTier != old.childTier { out.childTier = draft.childTier }
+            if draft.hasDue != old.hasDue || draft.due != old.due || draft.dueHasTime != old.dueHasTime {
+                out.hasDue = draft.hasDue
+                out.due = draft.due
+                out.dueHasTime = draft.dueHasTime
+            }
+            for (key, value) in draft.fields where value != (old.fields[key] ?? "") { out.fields[key] = value }
+            return out
+        }
     }
 
     private let tiers = ["public", "household", "personal", "private", "sealed"]
@@ -459,7 +477,7 @@ struct RecordView: View {
 
     // MARK: work
 
-    private func load() async {
+    private func load(keepEdits: Bool = true) async {
         schema = await SchemaCache.load(session)
         do {
             let (record, properties) = try await session.client().record(type: type, id: id)
@@ -480,14 +498,18 @@ struct RecordView: View {
             for spec in schema?.allFields(type) ?? [] {
                 if let value = properties[spec.key] {
                     if let number = value as? Double {
-                        next.fields[spec.key] = number.rounded() == number ? String(Int(number)) : String(number)
+                        // A whole number shows with no ".0". A very large one stays a Double: Int() would stop the app.
+                        next.fields[spec.key] = abs(number) < 1e15 && number.rounded() == number ? String(Int64(number)) : String(number)
                     } else if let text = value as? String {
                         next.fields[spec.key] = text
                     }
                 }
             }
-            draft = next
+            // A reload after a link, a tier, or an archive keeps the owner's edits that are not saved yet.
+            let old = saved
+            let edits = keepEdits && loaded && draft != saved
             saved = next
+            draft = edits ? Draft.rebase(draft, from: old, onto: next) : next
             for wanted in Set((schema?.allFields(type) ?? []).map(\.type)) where wanted == "person" || wanted == "thing" {
                 let entityType = wanted == "person" ? "person" : "asset"
                 if refOptions[wanted] == nil { refOptions[wanted] = (try? await session.client().entities(entityType)) ?? [] }
@@ -519,7 +541,7 @@ struct RecordView: View {
         for spec in fieldSpecs where (draft.fields[spec.key] ?? "") != (saved.fields[spec.key] ?? "") {
             let value = (draft.fields[spec.key] ?? "").trimmingCharacters(in: .whitespaces)
             if value.isEmpty { patch[spec.key] = NSNull() }
-            else if spec.type == "number", let number = Double(value) { patch[spec.key] = number }
+            else if spec.type == "number", let number = Double(value.replacingOccurrences(of: ",", with: ".")) { patch[spec.key] = number }
             else { patch[spec.key] = value }
         }
         if draft.childTier != saved.childTier { patch["child_tier"] = draft.childTier.isEmpty ? NSNull() : draft.childTier }
@@ -529,7 +551,7 @@ struct RecordView: View {
             _ = try await session.client().updateRecord(type: type, id: id, body: body)
             message = "Saved."
             failed = false
-            await load()
+            await load(keepEdits: false)
             await session.refreshToday()
         } catch {
             message = error.localizedDescription
