@@ -139,7 +139,7 @@ export function buildFridge(input: ScreenInput, id: FridgeScreenId): FridgeScree
     id,
     title: TITLES[id],
     date_label,
-    sections: [...fit(sections, ROWS_MAX - trimTail(tail)), ...tail],
+    sections: guardHeight([...fit(sections, ROWS_MAX - trimTail(tail)), ...tail]),
     entity_ids: [...new Set(used)],
   };
 }
@@ -177,26 +177,71 @@ function trimTail(tail: FridgeSection[]): number {
   return count();
 }
 
-/** Keep the panel to its rows. The first section keeps its rows first. A section that is cut says how many more. */
+/**
+ * Keep the panel to its rows. The first section keeps its rows first. Rows that do not fit are never dropped in
+ * silence: the last section on the panel ends with "+N more", and N counts every row that was left out, in this
+ * section and in the sections after it.
+ */
 function fit(sections: FridgeSection[], rows = ROWS_MAX): FridgeSection[] {
-  let left = rows;
+  const cost = (section: FridgeSection) => Math.max(1, section.rows.length);
+  const total = sections.reduce((sum, section) => sum + cost(section), 0);
+  const cut = total > rows;
+  // When rows are cut, one row of the budget is kept for the "+N more" line.
+  let left = cut ? Math.max(1, rows - 1) : rows;
   const out: FridgeSection[] = [];
+  let hidden = 0;
   for (const section of sections) {
-    if (left <= 0) break;
+    if (left <= 0) {
+      hidden += section.rows.length;
+      continue;
+    }
     if (section.rows.length === 0) {
       out.push({ label: section.label, rows: [{ time: "", text: EMPTY[section.label] ?? "Nothing here.", ink: "black" }] });
       left -= 1;
       continue;
     }
-    if (section.rows.length > left && left >= 2) {
-      const kept = section.rows.slice(0, left - 1);
-      out.push({ label: section.label, rows: [...kept, { time: "", text: `+${section.rows.length - kept.length} more`, ink: "black" }] });
-      left = 0;
-      continue;
-    }
-    const rows = section.rows.slice(0, left);
-    out.push({ label: section.label, rows });
-    left -= rows.length;
+    const kept = section.rows.slice(0, left);
+    hidden += section.rows.length - kept.length;
+    out.push({ label: section.label, rows: kept });
+    left -= kept.length;
+  }
+  if (hidden > 0 && out.length) out[out.length - 1]!.rows.push(more(hidden));
+  return out;
+}
+
+function more(count: number): FridgeRow {
+  return { time: "", text: `+${count} more`, ink: "black" };
+}
+
+/** The vertical room of the panel for sections: a label is 22 high, a row 40, and a section ends with 8. */
+const ROOM = 384;
+const sectionHeight = (section: FridgeSection) => (section.label ? 22 : 0) + section.rows.length * 40 + 8;
+
+/**
+ * The count of rows is not the whole story: each section also has a label. When the sections are taller than the
+ * panel, the last row would be drawn off it. Take rows from the last section that has two or more, and say how
+ * many with "+N more". Routines and the list are cut last, so no child is left out before a date is.
+ */
+function guardHeight(sections: FridgeSection[]): FridgeSection[] {
+  const out = sections.map((section) => ({ label: section.label, rows: [...section.rows] }));
+  const isMore = (row: FridgeRow) => /^\+\d+ more$/.test(row.text);
+  const shown = (section: FridgeSection) => section.rows.filter((row) => !isMore(row));
+  const carried = (section: FridgeSection) => {
+    const row = section.rows.find(isMore);
+    return row ? Number(/\d+/.exec(row.text)![0]) : 0;
+  };
+  // A section with a "+N more" line can give one more row. One without it needs three rows to give one.
+  const eligible = (section: FridgeSection) => (carried(section) > 0 ? shown(section).length >= 2 : section.rows.length >= 3);
+  const protectedSection = (section: FridgeSection) => section.rows.some((row) => row.ink === "yellow") || section.label === "Routines";
+  while (out.reduce((sum, section) => sum + sectionHeight(section), 0) > ROOM) {
+    let index = -1;
+    for (let i = out.length - 1; i >= 0 && index < 0; i--) if (!protectedSection(out[i]!) && eligible(out[i]!)) index = i;
+    for (let i = out.length - 1; i >= 0 && index < 0; i--) if (eligible(out[i]!)) index = i;
+    if (index < 0) break;
+    const section = out[index]!;
+    const rows = shown(section);
+    const before = carried(section);
+    section.rows = before > 0 ? [...rows.slice(0, rows.length - 1), more(before + 1)] : [...rows.slice(0, rows.length - 2), more(2)];
   }
   return out;
 }

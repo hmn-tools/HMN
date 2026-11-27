@@ -361,11 +361,13 @@ Settings → Activity. The audit log. Each row is a time, an action (`read`, `wr
 
 The Mac menu bar is the same paper, the same type, and the same stripe. It is not a phone screen. It does not show Today, family names, or note titles.
 
-It shows whether launchd has the job and whether the server answered. Start, Stop, and Restart talk to launchd. **Hide** drops every paired phone to Public and does not delete anything. **Show my things** clears that. **Pair a phone** shows the eight-character code and a QR of the `hmn://pair` payload. Phones list with Revoke. Backups can be taken and restored. Activity is the audit list, plus one line for whether the hash chain verifies. A broken chain is coral as well as the words. Teal is not the only signal.
+It names the state of the server: Stopped, Starting, Running, Not answering, or Had a fault. The cards for phones, backups, and activity show only while it runs. Start, Stop, and Restart talk to launchd, and a button that does nothing in the current state is dimmed. **Hide my things** drops every paired phone to Public and does not delete anything. **Show my things** clears that. **Pair a phone** shows the eight-character code and a QR of the `hmn://pair` payload. Phones list with Revoke. Backups can be taken and restored. Activity is the audit list, plus one line for whether the hash chain verifies. A broken chain is in the danger colour as well as the words. Teal is not the only signal.
 
-The owner key stays in the Keychain. The menu does not print it. Empty phones: "No phone is paired." Empty backups: "No backup yet." Empty activity: "No private reads yet." If the server is down: "The server did not answer."
+The owner key stays in the Keychain. The menu does not print it. Empty phones: "No phone is paired." Empty backups: "No backup yet." Empty activity: "No private reads yet." If the server is down: "Stopped" with "The server is not running. Press Start." An error sits inside the card of its button. The panel has one 16 point inset.
 
 ## Widgets and the lock screen
+
+A snapshot from an earlier day does not look like today: the widget says "Not updated since Yesterday 12:30." and shows no count. It reads the time from the labels that the snapshot already has. A second timeline entry at midnight makes the change without the app. Medium shows "+2 more" when more than three are due.
 
 Home screen widget, two sizes. The layout matches the home mock. The contents are the Personal ceiling, so they do not match the phone's counts.
 
@@ -413,4 +415,4 @@ Ink on paper is the text contrast. Teal is never the only carrier of meaning: qu
 - The app writes a date as "Today", "Tomorrow", "Yesterday", "Fri 13 Nov", or "13 Nov 2027", and a time in the phone's own clock. A stored id is never on a screen: "Personal", not "personal".
 - A chosen small chip is teal tint with a teal edge. Solid ink is for the main action only.
 - A row that opens has a chevron. A done task has one mark, a filled teal circle with a tick.
-- The tab bar has an icon and a word for each tab. At the largest text sizes it shows the icons only.
+- The tab bar has an icon and a word for each tab, on the owner's phone and on a member's. At the largest text sizes it shows the icons only.

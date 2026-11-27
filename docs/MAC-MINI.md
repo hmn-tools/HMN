@@ -79,13 +79,15 @@ Open `mac/HMNMenu.xcodeproj` and run HMNMenu. There is no Apple team and no prov
 
 The menu item is the word HMN. It shows:
 
-- Whether launchd has the job, and whether `GET /health` answered.
-- Start, Stop, and Restart.
-- Hide. Every paired phone drops to Public. The owner key on the mini is not hidden, so the menu can undo it. Nothing is deleted. Show my things clears it.
+- The state of the server in words: Stopped, Starting, Running, Not answering, or Had a fault, from whether launchd has the job and whether `GET /health` answered. While it is Stopped or Not answering, the panel shows only the Server card. The other cards come back when it runs. A button that does nothing in the current state is dimmed: Start while it runs, Stop while it is stopped.
+- Start, Stop, and Restart. After a start the panel looks again for about six seconds before it says the server is not answering.
+- Hide my things. Every paired phone drops to Public. The owner key on the mini is not hidden, so the menu can undo it. Nothing is deleted. Show my things clears it.
 - Pair a phone. The code and a QR code. The QR is the `hmn://pair` payload from `POST /api/v1/pairing`. The code is single use and dies in ten minutes.
-- Phones, with Revoke.
-- Back up, and Restore. Restore asks once, then replaces the graph with that encrypted backup.
-- Activity. The audit rows are a time, an action, a tier, and a surface. Titles are not shown. A line says whether the hash chain verifies.
+- Phones, with Revoke. Each says what it sees ("Sees up to Personal"), never its stored tier.
+- Back up now, and Restore. A backup is named by its time, with its size. The latest five show. Restore asks once, then replaces the graph with that encrypted backup.
+- Activity. Each audit row has two lines: the action and its tier ("Read, Private"), then the surface and the time in the Mac's own clock. Titles are not shown. The latest 20 show. A line says whether the activity record checks out.
+
+An error is a plain sentence in danger colour inside the card whose button caused it. An error that belongs to no card is at the top.
 
 If the owner key is missing from the Keychain, the menu has a secure field. Paste the key from the first boot. It is stored as `hmn.owner` and not shown again.
 

@@ -46,6 +46,7 @@ curl --cacert "$CA" -H "Authorization: Bearer $HMN_OWNER_KEY" -H "Content-Type: 
 - It shows four household screens, one for each time of day, in the owner's time zone: This morning (06:00), This week (09:00), Tonight and tomorrow (16:00), and Good night (21:00). [ONTOLOGY.md](ONTOLOGY.md), section 5.3, has the design.
 - The morning and evening screens show the children's routines that are due today, one row for each child: what is left, or "all done". A tick on a phone changes the picture, so the fridge shows it at its next refresh.
 - The evening screen ends with the list that changed last (a project of the kind `list`), its open items on one yellow row with black text. The list keeps its row when the evening is full. A list above Household is not on the fridge.
+- A screen has at most six rows, and the sections and their labels must fit the panel. Rows that do not fit are counted on the last section as "+N more", whatever section they were in. Routines and the list are cut last.
 - The image name changes only when the picture changes, and the display asks again every ten minutes or at the next window. So the panel refreshes only for a change.
 - The image is `GET /api/trmnl/fridge.png` (or `.bmp` for a black and white panel). It answers 404 for every key that is not a household display.
 

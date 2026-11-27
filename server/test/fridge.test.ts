@@ -207,3 +207,29 @@ test("the evening shows the newest list on one yellow row, and a Private list st
     app.close();
   }
 });
+
+test("rows that do not fit are counted, never dropped in silence, and the rows fit the panel", async () => {
+  // 07:00 in Perth on Thursday 12 November: eight things today, and tasks due today.
+  const { app } = clockedApp("2026-11-11T23:00:00.000Z");
+  try {
+    for (let hour = 0; hour < 8; hour++) {
+      await event(app, `Example meeting ${hour + 1}`, `2026-11-12T${String(1 + hour).padStart(2, "0")}:00:00.000Z`, "household");
+    }
+    for (const title of ["Example form", "Example parcel"]) {
+      const made = await call(app, "/api/v1/task", { method: "POST", ...owner(app), body: { title, status: "open", kind: "task", due_at: "2026-11-12", tier: "household" } });
+      expect(made.status).toBe(201);
+    }
+    const key = await pairFridge(app, "41:B4:10:39:A1:77", { ceiling: "household", palette: "bwry" });
+    const access = displayAccess(app.hmn, key, FRIDGE_IP).access;
+    const morning = app.hmn.fridgeScreen(access, "morning");
+    const rows = morning.sections.flatMap((section) => section.rows);
+    const last = rows[rows.length - 1]!;
+    expect(last.text).toMatch(/^\+\d+ more$/);
+    // Ten rows exist. The count in the line is the number that are not shown.
+    expect(rows.length - 1 + Number(/\d+/.exec(last.text)![0])).toBe(10);
+    const height = morning.sections.reduce((sum, section) => sum + (section.label ? 22 : 0) + section.rows.length * 40 + 8, 0);
+    expect(height).toBeLessThanOrEqual(384);
+  } finally {
+    app.close();
+  }
+});
