@@ -184,6 +184,13 @@ async function route(hmn: Hmn, req: Request, ip: string | null, fingerprint: str
   if (req.method === "GET" && reads) {
     return json({ reads: hmn.clientReads(access, decodeURIComponent(reads[1]!), Number(url.searchParams.get("limit") ?? 50) || 50) });
   }
+  const agentPage = pathname.match(/^\/api\/v1\/access\/([^/]+)\/(scope|today|timeline)$/);
+  if (req.method === "GET" && agentPage) {
+    const id = decodeURIComponent(agentPage[1]!);
+    if (agentPage[2] === "scope") return json(hmn.agentScope(access, id));
+    if (agentPage[2] === "today") return json(hmn.agentToday(access, id));
+    return json(hmn.agentTimeline(access, id, Number(url.searchParams.get("limit") ?? 100) || 100));
+  }
   if (req.method === "GET" && (pathname === "/api/v1/access" || pathname === "/api/v1/access.html")) {
     if (access.principal.scope !== "write") throw new ApiError(403, "forbidden", "The owner sees connected clients.");
     const body = accessConnections(hmn, access);

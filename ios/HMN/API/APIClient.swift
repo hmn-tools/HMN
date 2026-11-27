@@ -241,6 +241,16 @@ final class APIClient: NSObject, URLSessionDelegate {
         let list: ClientReadList = try await send("/api/v1/access/\(try Path.segment(id))/reads?limit=\(limit)", surface: "phone")
         return list.reads
     }
+    func agentScope(_ id: String) async throws -> AgentScope {
+        try await send("/api/v1/access/\(try Path.segment(id))/scope", surface: "phone")
+    }
+    /// The Today screen as that agent key would get it. Read only.
+    func agentToday(_ id: String) async throws -> TodayScreen {
+        try await send("/api/v1/access/\(try Path.segment(id))/today", surface: "phone")
+    }
+    func agentTimeline(_ id: String, limit: Int = 100) async throws -> AgentTimeline {
+        try await send("/api/v1/access/\(try Path.segment(id))/timeline?limit=\(limit)", surface: "phone")
+    }
     func neighbours(type: String, id: String, depth: Int = 2) async throws -> Neighbours {
         try await send("/api/v1/\(try Path.segment(type))/\(try Path.segment(id))/neighbours?depth=\(depth)", surface: "phone")
     }

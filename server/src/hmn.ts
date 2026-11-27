@@ -37,6 +37,7 @@ import { versionHash, type VersionRow } from "./history";
 import { DEMO_KINDS, KIND_TYPES, Kinds, MEMBER_ROLES, PARTNER_ROLE, ROLES, ensureKindTables, roleSets, seedKinds, titleOf } from "./kinds";
 import { ANY, APPROVAL_MODES, autoBlocked, DEFAULT_RULES, ensureApprovalTables, isMemberSource, modeFor, POLICY_OPS, sourceCanAuto, sourceOf, type ApprovalMode, type PolicyRule, type ProposalClass } from "./approval";
 import { syncMirror } from "./mirror";
+import { agentScope, agentTimeline, refuseMember, type AgentPageContext } from "./agentpage";
 import { ensureJournals } from "./journal";
 import { ensureDeviceTables } from "./devices/tables";
 import { ensureExternalTables } from "./external/tables";
@@ -1829,6 +1830,42 @@ export class Hmn {
     };
   }
 
+  /** The page of one agent key: the access of the key without its secret, and the pieces that agentpage.ts reads. */
+  private agentPage(access: Access, id: string) {
+    assertScope(access, "write");
+    refuseMember(access);
+    assertNotHidden(access);
+    const row = this.agentKey(id);
+    const keyAccess = makeAccess(principalFromRow(row, this.now().toISOString()), "mcp", false);
+    const ctx: AgentPageContext = {
+      db: this.store.db,
+      visibleFor: (who) => this.visibleFor(who),
+      proposalTitle: (line) => {
+        const full = this.proposal(line.id);
+        return this.viewProposal(full, access)?.summary?.title ?? null;
+      },
+    };
+    return { row, keyAccess, ctx };
+  }
+
+  /** What one key can see now, as counts. The access is built from the credential row, so the secret is not used. */
+  agentScope(access: Access, id: string) {
+    const { row, keyAccess, ctx } = this.agentPage(access, id);
+    return agentScope(ctx, access, keyAccess, row.id, row.name);
+  }
+
+  /** The Today screen as one key would get it from the MCP surface. It is not logged as a read by that key. */
+  agentToday(access: Access, id: string): TodayScreen {
+    const { keyAccess } = this.agentPage(access, id);
+    return this.screen(keyAccess, "today", true);
+  }
+
+  /** What one key did, newest first. */
+  agentTimeline(access: Access, id: string, limit: number) {
+    const { row, ctx } = this.agentPage(access, id);
+    return agentTimeline(ctx, row.id, limit);
+  }
+
   /** Every live entity that one access can read, with no audit row and no read log. For a preview. */
   private visibleFor(access: Access): EntityView[] {
     const areas = this.areaMap();
@@ -2400,7 +2437,7 @@ export class Hmn {
     return this.screen(access, "today");
   }
 
-  screen(access: Access, id: string): TodayScreen {
+  screen(access: Access, id: string, quiet = false): TodayScreen {
     const input = this.screenInput(access);
     let screen: TodayScreen;
     if (id === "today") screen = buildToday(input);
@@ -2423,9 +2460,12 @@ export class Hmn {
         }),
       })),
     };
-    for (const entityId of screen.entity_ids) {
-      const view = input.views.get(entityId);
-      if (view) this.noteRead(access, view);
+    // The owner's look as an agent is not a read by the agent. It leaves no row in the read log.
+    if (!quiet) {
+      for (const entityId of screen.entity_ids) {
+        const view = input.views.get(entityId);
+        if (view) this.noteRead(access, view);
+      }
     }
     return screen;
   }

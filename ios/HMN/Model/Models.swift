@@ -388,6 +388,10 @@ struct AgentKey: Codable, Identifiable {
     var privateUntil: String?
     var expiresAt: String?
     var denyAreas: [String]
+    /// Only these areas, or nil for every area that is not denied.
+    var allowAreas: [String]?
+    /// Only these types, or nil for every type.
+    var allowTypes: [String]?
     var lastUsedAt: String?
     var state: String
     var keychainItem: String?
@@ -430,6 +434,50 @@ struct KeyPreview: Codable {
     struct Example: Codable {
         var type: String
         var title: String
+    }
+}
+
+/// What one key can see now, as counts. No row title is in it. docs/UX.md, "The agent page".
+struct AgentScope: Codable {
+    var id: String
+    var name: String
+    var ceiling: String
+    var total: Int
+    var byType: [TypeCount]
+    var byArea: [AreaCount]
+    var closed: [String]
+    struct TypeCount: Codable, Identifiable {
+        var type: String
+        var count: Int
+        var id: String { type }
+    }
+    struct AreaCount: Codable, Identifiable {
+        var areaId: String?
+        var title: String?
+        var count: Int
+        var id: String { areaId ?? "none" }
+    }
+}
+
+/// What one key did, newest first, and the counts of its proposals and requests.
+struct AgentTimeline: Codable {
+    var summary: Summary
+    var items: [Item]
+    struct Summary: Codable {
+        var approved: Int
+        var declined: Int
+        var pending: Int
+        var openRequests: Int
+    }
+    struct Item: Codable, Identifiable {
+        var at: String
+        /// `read`, `proposal`, or `request`.
+        var kind: String
+        var text: String
+        var status: String?
+        var proposalId: String?
+        var requestId: String?
+        var id: String { proposalId ?? requestId ?? at + kind + text }
     }
 }
 

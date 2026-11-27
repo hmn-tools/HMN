@@ -77,11 +77,21 @@ struct KeysView: View {
     private func card(_ key: AgentKey) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(shown(key)).font(Theme.row)
-                    Text(line(key)).font(Theme.small).foregroundStyle(Theme.stone)
+                NavigationLink {
+                    AgentPageView(key: key)
+                } label: {
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(shown(key)).font(Theme.row).foregroundStyle(Theme.ink)
+                            Text(line(key)).font(Theme.small).foregroundStyle(Theme.stone)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.stone)
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
-                Spacer()
+                .buttonStyle(.plain)
                 Menu {
                     if !readsOnly(key) {
                         if key.ceiling == "private" {

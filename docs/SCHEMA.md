@@ -547,6 +547,9 @@ A member's phone writes with the same routes as the owner (`POST /api/v1/:type`,
 | `GET /api/v1/search?q=` | read, write, agent | Title and body, scoped, ranked, limit 40. Each word must match. `&match=any` accepts one matching word. |
 | `GET /api/v1/:type/:id/neighbours?depth=` | read, write, agent | The entities around one entity, to a depth of 1 to 3 links. |
 | `GET /api/v1/access/:id/reads` | write | What one agent key read: each search with its words, and each entity. |
+| `GET /api/v1/access/:id/scope` | write, owner only | What one agent key can see now: the ceiling, the total, counts by type and by area, and what stays closed. Counts only, with no row title. |
+| `GET /api/v1/access/:id/today` | write, owner only | The Today screen as that key gets it on the MCP surface. It adds no row to the read log of the key. |
+| `GET /api/v1/access/:id/timeline?limit=` | write, owner only | What the key did, newest first, at most 200: reads, proposals, and requests. Each search or view is one line. It has the summary counts of proposals and open requests. |
 | `GET /api/v1/proposals?status=pending` | read, write, agent | Pending by default. Each entry in `payload.links` has a `title` when the caller can see the linked row. A row that the caller cannot see has no `title`. |
 | `POST /api/v1/proposals` | write, agent | Create a proposal. An `idempotency_key` in the body, or an `Idempotency-Key` header, makes a retry return the first proposal with 200. |
 | `PATCH /api/v1/proposals/:id` | write | Edit a pending proposal's title, due date, or reason. |
