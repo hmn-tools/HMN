@@ -4,6 +4,10 @@
 
 Update the server and the iPhone app together.
 
+### Before you update
+
+- An agent key with a list of allowed areas now reads only those areas. Before, it could also read every row with no area, and every area row. If one of your keys has an area list and needs rows with no area, turn on "Items with no area" on its Job card after the update (the word `none` in `allow_areas`).
+
 - A new tier, Household, between Public and Personal. The fridge, the people of the home, and your own surfaces read it. A guest agent, the lock screen, and a Public display do not.
 - The fridge: a TRMNL BWRY claimed at Household shows four household screens by the time of day, in four inks. See [docs/TRMNL.md](docs/TRMNL.md).
 - Lists: a project of the kind `list` holds items. Tick an item, or bring a done one back with Again. Items stay off Today and the reviews. The evening fridge screen shows the newest list on one yellow row.
@@ -35,6 +39,10 @@ Update the server and the iPhone app together.
 - The server pages fit a phone, have dark mode, show words and times in words, and have no dead controls. The Connected page points to the app to revoke a key, because its form could not work.
 - The widget says "Not updated since Yesterday 12:30." when its copy is old, changes at midnight, and shows "+2 more". A member's phone has tab icons, and a member cannot choose a tier that would hide a new list from them.
 - The fridge counts every row that it cuts and fits its sections to the panel, so the last row is never off the panel.
+- How agents read. New MCP tools give an agent the same views as your phone, cut to its key: `today`, `upcoming`, `week`, `person_page`, and `expiring`. Each row that a view returns is in the read log.
+- A page for each agent key, from Agents and apps: what it can see (counts by type and area), "See as this agent" (its Today, which is not logged as its read), and what it did (its reads, proposals, and requests on one timeline). Routes: `GET /api/v1/access/:id/scope`, `/today`, `/timeline`.
+- Job scopes. Each key has a Job card: a purpose in plain words (for you only), the areas it can read, whether it reads items with no area, and the types it can read. A new key starts with no area. An allow list now holds on every read path, on `free_busy`, and on proposals (`403 outside_scope`). A rotated key keeps its job.
+- A changes feed for an agent that keeps its own memory. Only a key that you mark "Keeps its own memory" gets the MCP tool `changes_since`: each row that it may see and that changed, with a cursor, at most 2,000 rows a day. A row that leaves its view comes as "removed", so the agent forgets it. A row it never saw never appears.
 - The menu bar app, the widget, and the server pages are in the same Garden design as the app, with IBM Plex Sans. The Public TRMNL deck loses its ink bars.
 
 ## 0.2.1, 2026-11-23
