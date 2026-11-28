@@ -2,9 +2,21 @@
  * The fridge: the household's shared glance, on an e-ink panel. It reads the Household tier, through the same
  * policy layer as every reader, so the views here are already filtered. It changes by the time of day, and its
  * image name changes only when its picture changes, so a slow colour panel does not flash for nothing.
+ * The layout follows Garden on the phone and the iOS widget: a header with the mark, four card segments, and
+ * a dark focus pane for this moment. Colour is for marks, rails, and the one band — not for the words.
  * docs/ONTOLOGY.md, section 5.3, has the design.
  */
-import { GLYPH_H, GLYPH_W, GLYPHS } from "./glyphs";
+import {
+  drawMark,
+  drawText,
+  faces,
+  fillRect,
+  fillRoundRect,
+  measure,
+  MARK_40,
+  strokeCircle,
+  strokeRoundRect,
+} from "./devices/eink-type";
 import type { EntityView } from "./policy";
 import { isTaskRow, type ScreenInput, type SourcedLink } from "./screens";
 import { dueDateKey, eventOver, hasClock, zoned } from "./time";
@@ -15,16 +27,30 @@ import { dueOn, routineDays, routinePeople } from "./routines";
 export const FRIDGE_SCREENS = ["morning", "week", "evening", "quiet"] as const;
 export type FridgeScreenId = (typeof FRIDGE_SCREENS)[number];
 
-/** Black for text, red for now and today, yellow for one highlight. */
-export type Ink = "black" | "red" | "yellow";
+/** A mark on a row or on the focus pane. The words themselves stay ink on paper, or paper on ink. */
+export type FridgeMark = "now" | "due" | "left" | "list" | "open";
 
-export type FridgeRow = { time: string; text: string; ink: Ink };
-export type FridgeSection = { label: string; rows: FridgeRow[] };
+export type FridgeItem = { time: string; text: string; detail?: string; mark?: FridgeMark };
+export type FridgePaneId = "focus" | "today" | "week" | "tonight" | "tomorrow" | "routines" | "todo" | "list";
+export type FridgePane = {
+  id: FridgePaneId;
+  label: string;
+  tone: "dark" | "light";
+  kicker?: string;
+  time?: string;
+  title?: string;
+  subtitle?: string;
+  mark?: FridgeMark;
+  items: FridgeItem[];
+  empty?: string;
+  accent?: "yellow";
+};
+
 export type FridgeScreen = {
   id: FridgeScreenId;
   title: string;
   date_label: string;
-  sections: FridgeSection[];
+  panes: FridgePane[];
   entity_ids: string[];
   /** A member pairing code that the owner put on the fridge. It takes the whole panel while it lasts. */
   pairing?: { payload: string; name: string | null; until: string };
@@ -53,8 +79,8 @@ export function secondsToNextWindow(now: Date, timeZone: string): number {
   return Math.max(60, (next - minutes) * 60);
 }
 
-/** At most this many rows on the panel, so that a row is readable across a kitchen. */
-const ROWS_MAX = 6;
+/** Rows that fit one light pane at a readable size, seen from the kitchen. */
+const PANE_ROWS = 4;
 
 export function buildFridge(input: ScreenInput, id: FridgeScreenId): FridgeScreen {
   const { views, links, now, timeZone } = input;
@@ -64,7 +90,6 @@ export function buildFridge(input: ScreenInput, id: FridgeScreenId): FridgeScree
   const nowMs = now.getTime();
   const fixtureKinds = input.roles?.fixtureEvent ?? new Set<string>();
   const all = [...views.values()];
-  // An event that is over is not on the fridge: a game that started this afternoon is gone when it ends.
   const events = all
     .filter((item) => item.type === "event" && !eventOver(item, now, timeZone, fixtureKinds.has(item.kind ?? "")))
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
@@ -73,23 +98,98 @@ export function buildFridge(input: ScreenInput, id: FridgeScreenId): FridgeScree
     .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
   const on = (item: EntityView, key: string) => dueDateKey(item.due_at!, timeZone) === key;
   const used: string[] = [];
-  const row = (item: EntityView, ink: Ink, time?: string): FridgeRow => {
+  const take = (item: EntityView) => {
     used.push(item.id);
-    return { time: time ?? clock(item, timeZone), text: label(item, links), ink };
+    return item;
+  };
+  const peopleLine = (item: EntityView) => {
+    const people = links
+      .filter((link) => link.source_id === item.id && link.direction === "out" && (link.rel === "with" || link.rel === "for") && link.peer.type === "person")
+      .map((link) => link.peer.title);
+    return [...new Set(people)].filter((name) => !item.title.includes(name)).join(", ");
+  };
+  const itemOf = (item: EntityView, mark: FridgeMark | undefined, time?: string): FridgeItem => {
+    take(item);
+    const who = peopleLine(item);
+    return { time: time ?? clock(item, timeZone), text: label(item, links), detail: who || undefined, mark };
   };
   const date_label = `${zone.weekday} ${Number(zone.day)}/${zone.month}`;
-  const sections: FridgeSection[] = [];
-  // Sections that keep their place at the end, whatever the rows above them.
-  const tail: FridgeSection[] = [];
+  const early = (item: EntityView) => hasClock(item.due_at!) && zoned(new Date(item.due_at!), timeZone).hour < 9;
+  const inProgress = (item: EntityView) => hasClock(item.due_at!) && Date.parse(item.due_at!) <= nowMs && !eventOver(item, now, timeZone, false);
+  const routines = routineItems(all, links, zone, used);
+  const list = shoppingList(all, links);
+  const listPane = (): FridgePane | null => {
+    if (!list) return null;
+    used.push(list.list.id, ...list.items.map((item) => item.id));
+    return {
+      id: "list",
+      label: list.list.title,
+      tone: "light",
+      accent: "yellow",
+      items: fitItems(
+        list.items.map((item) => ({ time: "", text: item.title, mark: "list" as const })),
+        PANE_ROWS,
+      ),
+    };
+  };
+  const routinePane = (): FridgePane | null =>
+    routines.length
+      ? { id: "routines", label: "Routines", tone: "light", items: fitItems(routines, PANE_ROWS) }
+      : null;
+  const focusFrom = (item: EntityView, kicker: string, mark: FridgeMark, subtitle?: string): FridgePane => {
+    take(item);
+    const who = peopleLine(item);
+    return {
+      id: "focus",
+      label: "",
+      tone: "dark",
+      kicker,
+      time: clock(item, timeZone) || undefined,
+      title: item.title,
+      subtitle: subtitle ?? (who || undefined),
+      mark,
+      items: [],
+    };
+  };
+  const emptyFocus = (line: string): FridgePane => ({
+    id: "focus",
+    label: "",
+    tone: "dark",
+    kicker: "HMN",
+    title: line,
+    items: [],
+  });
+
+  let panes: FridgePane[] = [];
 
   if (id === "morning") {
-    const todays = events.filter((item) => on(item, today) && !fixtureKinds.has(item.kind ?? ""));
-    // The next thing that starts is red. The rest of the day is black.
-    const next = todays.find((item) => !hasClock(item.due_at!) || Date.parse(item.due_at!) >= nowMs);
-    sections.push({ label: "Today", rows: todays.map((item) => row(item, item === next ? "red" : "black")) });
+    const todays = events.filter((item) => {
+      if (!on(item, today) || fixtureKinds.has(item.kind ?? "")) return false;
+      if (!hasClock(item.due_at!)) return true;
+      return zoned(new Date(item.due_at!), timeZone).hour < 16;
+    });
+    const current =
+      todays.find((item) => inProgress(item)) ??
+      todays.find((item) => !hasClock(item.due_at!) || Date.parse(item.due_at!) >= nowMs);
     const due = tasks.filter((item) => dueDateKey(item.due_at!, timeZone) <= today);
-    if (due.length) sections.push({ label: "To do today", rows: due.map((item) => row(item, "red", "")) });
-    routinesTail(all, links, zone, used, tail);
+    const focusItem = current ?? due[0];
+    const focus = focusItem
+      ? focusFrom(
+          focusItem,
+          current && inProgress(current) ? "Now" : current ? "Next" : "Due today",
+          current && inProgress(current) ? "now" : current ? "now" : "due",
+        )
+      : emptyFocus("A free morning.");
+    const todayRows = todays.filter((item) => item.id !== focusItem?.id).map((item) => itemOf(item, undefined));
+    const dueRows = due.filter((item) => item.id !== focusItem?.id).map((item) => itemOf(item, "due", ""));
+    panes = [
+      focus,
+      { id: "today", label: "Today", tone: "light", items: fitItems(todayRows, PANE_ROWS), empty: todayRows.length || focusItem ? "Nothing else this morning." : "A free morning." },
+      routinePane() ?? { id: "routines", label: "Routines", tone: "light", items: [], empty: "Caught up." },
+      dueRows.length
+        ? { id: "todo", label: "To do today", tone: "light", items: fitItems(dueRows, PANE_ROWS), empty: "Caught up." }
+        : listPane() ?? { id: "todo", label: "To do today", tone: "light", items: [], empty: "Caught up." },
+    ];
   } else if (id === "week") {
     const week = [...events, ...tasks]
       .filter((item) => !fixtureKinds.has(item.kind ?? ""))
@@ -98,48 +198,108 @@ export function buildFridge(input: ScreenInput, id: FridgeScreenId): FridgeScree
         return key >= today && key <= dayKey(now, timeZone, 6);
       })
       .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
-    // The day name shows once, at its first row. Only a task that is due today is red: a whole week in red is noise.
-    let lastDay = "";
-    const rows = week.map((item) => {
-      const day = dayName(item, timeZone);
-      const time = `${day === lastDay ? " ".repeat(day.length) : day} ${clock(item, timeZone)}`.trimEnd();
-      lastDay = day;
-      return row(item, item.type === "task" && dueDateKey(item.due_at!, timeZone) <= today ? "red" : "black", time);
-    });
-    sections.push({ label: "", rows });
-    const fixture = events.find((item) => fixtureKinds.has(item.kind ?? "") && Date.parse(item.due_at!) >= nowMs);
-    if (fixture) sections.push({ label: "To watch", rows: [row(fixture, "black", dayAndClock(fixture, timeZone))] });
+    const packed: EntityView[] = [];
+    const seen = new Set<string>();
+    for (let offset = 0; offset <= 6; offset++) {
+      const first = week.find((item) => dueDateKey(item.due_at!, timeZone) === dayKey(now, timeZone, offset));
+      if (first) {
+        packed.push(first);
+        seen.add(first.id);
+      }
+    }
+    for (const item of week) if (!seen.has(item.id)) packed.push(item);
+    const todayItems = packed.filter((item) => on(item, today) || (item.type === "task" && dueDateKey(item.due_at!, timeZone) <= today));
+    const later = packed.filter((item) => !todayItems.includes(item));
+    const focusItem = todayItems[0] ?? later[0];
+    const focus = focusItem
+      ? focusFrom(
+          focusItem,
+          on(focusItem, today) || (focusItem.type === "task" && dueDateKey(focusItem.due_at!, timeZone) <= today)
+            ? focusItem.type === "task"
+              ? "Due today"
+              : "Today"
+            : dayName(focusItem, timeZone),
+          focusItem.type === "task" && dueDateKey(focusItem.due_at!, timeZone) <= today ? "due" : "open",
+        )
+      : emptyFocus("A clear week.");
+    const laterRows = later.filter((item) => item.id !== focusItem?.id).map((item) => itemOf(item, undefined, dayAndClock(item, timeZone)));
+    const restToday = todayItems.filter((item) => item.id !== focusItem?.id).map((item) => itemOf(item, item.type === "task" ? "due" : undefined, clock(item, timeZone) || ""));
+    panes = [
+      focus,
+      { id: "week", label: "This week", tone: "light", items: fitItems(laterRows, PANE_ROWS), empty: "A clear week." },
+      { id: "today", label: "Also today", tone: "light", items: fitItems(restToday, PANE_ROWS), empty: "Nothing else today." },
+      listPane() ?? routinePane() ?? { id: "todo", label: "To do", tone: "light", items: [], empty: "Caught up." },
+    ];
   } else if (id === "evening") {
-    const tonight = events.filter((item) => on(item, today) && hasClock(item.due_at!) && Date.parse(item.due_at!) >= nowMs);
-    if (tonight.length) sections.push({ label: "Tonight", rows: tonight.map((item) => row(item, "black")) });
-    // A task due today that is not done yet is red in the evening, so it is not missed.
-    const undone = tasks.filter((item) => on(item, today));
-    if (undone.length) sections.push({ label: "Still to do today", rows: undone.map((item) => row(item, "red", "")) });
-    // An early start tomorrow is red, so it is seen the evening before.
-    const early = (item: EntityView) => hasClock(item.due_at!) && zoned(new Date(item.due_at!), timeZone).hour < 9;
+    const tonight = events.filter((item) => {
+      if (!on(item, today) || !hasClock(item.due_at!)) return false;
+      if (zoned(new Date(item.due_at!), timeZone).hour < 16) return false;
+      return Date.parse(item.due_at!) >= nowMs || !eventOver(item, now, timeZone, false);
+    });
+    const current = tonight.find((item) => inProgress(item)) ?? tonight.find((item) => Date.parse(item.due_at!) >= nowMs);
     const next = [...events.filter((item) => on(item, tomorrow)), ...tasks.filter((item) => on(item, tomorrow))].sort((a, b) =>
       String(a.due_at).localeCompare(String(b.due_at)),
     );
-    sections.push({ label: "Tomorrow", rows: next.map((item) => row(item, early(item) ? "red" : "black")) });
-    routinesTail(all, links, zone, used, tail);
-    // The list that changed last, on one yellow row, so the shopping is seen before the shops close.
-    const list = shoppingList(all, links);
-    if (list) {
-      used.push(list.list.id, ...list.items.map((item) => item.id));
-      tail.push({ label: list.list.title, rows: [{ time: "", text: list.items.map((item) => item.title).join(", "), ink: "yellow" }] });
-    }
+    const undone = tasks.filter((item) => on(item, today));
+    // The focus is tonight's current or next start. If the evening is clear, tomorrow's first start takes the pane.
+    const focus = current
+      ? { ...focusFrom(current, inProgress(current) ? "Now" : "Next", "now"), items: tonight.filter((item) => item !== current).slice(0, 2).map((item) => itemOf(item, undefined)) }
+      : next[0]
+        ? focusFrom(next[0], "Tomorrow", early(next[0]) ? "now" : "open")
+        : emptyFocus("Nothing later tonight.");
+    // Tomorrow's first start always has a row in the Tomorrow pane, even when leftover tasks or a list compete.
+    const tomorrowRows = next.map((item) => itemOf(item, early(item) ? "now" : undefined));
+    const todoRows = undone.map((item) => itemOf(item, "due", ""));
+    const routinesP = routinePane();
+    const listP = listPane();
+    // Four quarters: focus, tomorrow, routines or leftover tasks, list (or the remaining of those).
+    const third = routinesP ?? (todoRows.length
+      ? { id: "todo" as const, label: "Still to do", tone: "light" as const, items: fitItems(todoRows, PANE_ROWS), empty: "Caught up." }
+      : { id: "tonight" as const, label: "Tonight", tone: "light" as const, items: [], empty: "Nothing later tonight." });
+    const fourth = listP ?? (routinesP && third.id !== "routines" ? routinesP : todoRows.length && third.id !== "todo"
+      ? { id: "todo" as const, label: "Still to do", tone: "light" as const, items: fitItems(todoRows, PANE_ROWS), empty: "Caught up." }
+      : { id: "list" as const, label: "List", tone: "light" as const, items: [], empty: "Nothing on the list." });
+    panes = [
+      focus,
+      {
+        id: "tomorrow",
+        label: "Tomorrow",
+        tone: "light",
+        items: fitItems(tomorrowRows, PANE_ROWS),
+        empty: "Nothing early tomorrow.",
+      },
+      third,
+      fourth,
+    ];
   } else {
-    // After midnight the coming day is today, so a 06:30 flight shows at 02:00.
     const key = zone.hour < 6 ? today : tomorrow;
-    const first = events.find((item) => on(item, key));
-    sections.push({ label: zone.hour < 6 ? "Today" : "Tomorrow", rows: first ? [row(first, "black")] : [] });
+    const coming = [...events.filter((item) => on(item, key)), ...tasks.filter((item) => on(item, key))].sort((a, b) =>
+      String(a.due_at).localeCompare(String(b.due_at)),
+    );
+    const first = coming[0];
+    const focus = first
+      ? focusFrom(first, zone.hour < 6 ? "Today" : "Tomorrow", early(first) ? "now" : "open")
+      : emptyFocus("Nothing early tomorrow.");
+    const rest = coming.filter((item) => item.id !== first?.id).map((item) => itemOf(item, early(item) ? "now" : undefined));
+    panes = [
+      focus,
+      {
+        id: zone.hour < 6 ? "today" : "tomorrow",
+        label: zone.hour < 6 ? "Today" : "Tomorrow",
+        tone: "light",
+        items: fitItems(rest, PANE_ROWS),
+        empty: "Nothing early tomorrow.",
+      },
+      routinePane() ?? { id: "routines", label: "Routines", tone: "light", items: [], empty: "Caught up." },
+      listPane() ?? { id: "list", label: "List", tone: "light", items: [], empty: "Nothing on the list." },
+    ];
   }
 
   return {
     id,
     title: TITLES[id],
     date_label,
-    sections: guardHeight([...fit(sections, ROWS_MAX - trimTail(tail)), ...tail]),
+    panes,
     entity_ids: [...new Set(used)],
   };
 }
@@ -147,103 +307,14 @@ export function buildFridge(input: ScreenInput, id: FridgeScreenId): FridgeScree
 const TITLES: Record<FridgeScreenId, string> = {
   morning: "This morning",
   week: "This week",
-  evening: "Tonight and tomorrow",
+  evening: "This evening",
   quiet: "Good night",
 };
 
-/** The empty line of each section. Short, and with a little character. */
-const EMPTY: Record<string, string> = {
-  Today: "Nothing booked. A free day.",
-  "": "A clear week.",
-  Tomorrow: "Nothing early. Sleep in.",
-};
-
-/** The rows that the dates and tasks of a screen keep, whatever the routines and the list take. */
-const MAIN_ROWS_MIN = 3;
-
-/**
- * The routines and the list keep their place at the end, but they do not push today's dates and tasks off the panel.
- * When they would leave fewer than MAIN_ROWS_MIN rows, the routines give up rows first. Returns the rows they keep.
- */
-function trimTail(tail: FridgeSection[]): number {
-  const count = () => tail.reduce((sum, section) => sum + section.rows.length, 0);
-  const routines = tail.find((section) => section.label === "Routines");
-  while (routines && ROWS_MAX - count() < MAIN_ROWS_MIN && routines.rows.length > 1) {
-    const cut = routines.rows.pop()!;
-    const last = routines.rows[routines.rows.length - 1]!;
-    // The names of the children who lost a row stay on the last row, so no child is left out.
-    last.text = `${last.text} · ${cut.text}`;
-  }
-  return count();
-}
-
-/**
- * Keep the panel to its rows. The first section keeps its rows first. Rows that do not fit are never dropped in
- * silence: the last section on the panel ends with "+N more", and N counts every row that was left out, in this
- * section and in the sections after it.
- */
-function fit(sections: FridgeSection[], rows = ROWS_MAX): FridgeSection[] {
-  const cost = (section: FridgeSection) => Math.max(1, section.rows.length);
-  const total = sections.reduce((sum, section) => sum + cost(section), 0);
-  const cut = total > rows;
-  // When rows are cut, one row of the budget is kept for the "+N more" line.
-  let left = cut ? Math.max(1, rows - 1) : rows;
-  const out: FridgeSection[] = [];
-  let hidden = 0;
-  for (const section of sections) {
-    if (left <= 0) {
-      hidden += section.rows.length;
-      continue;
-    }
-    if (section.rows.length === 0) {
-      out.push({ label: section.label, rows: [{ time: "", text: EMPTY[section.label] ?? "Nothing here.", ink: "black" }] });
-      left -= 1;
-      continue;
-    }
-    const kept = section.rows.slice(0, left);
-    hidden += section.rows.length - kept.length;
-    out.push({ label: section.label, rows: kept });
-    left -= kept.length;
-  }
-  if (hidden > 0 && out.length) out[out.length - 1]!.rows.push(more(hidden));
-  return out;
-}
-
-function more(count: number): FridgeRow {
-  return { time: "", text: `+${count} more`, ink: "black" };
-}
-
-/** The vertical room of the panel for sections: a label is 22 high, a row 40, and a section ends with 8. */
-const ROOM = 384;
-const sectionHeight = (section: FridgeSection) => (section.label ? 22 : 0) + section.rows.length * 40 + 8;
-
-/**
- * The count of rows is not the whole story: each section also has a label. When the sections are taller than the
- * panel, the last row would be drawn off it. Take rows from the last section that has two or more, and say how
- * many with "+N more". Routines and the list are cut last, so no child is left out before a date is.
- */
-function guardHeight(sections: FridgeSection[]): FridgeSection[] {
-  const out = sections.map((section) => ({ label: section.label, rows: [...section.rows] }));
-  const isMore = (row: FridgeRow) => /^\+\d+ more$/.test(row.text);
-  const shown = (section: FridgeSection) => section.rows.filter((row) => !isMore(row));
-  const carried = (section: FridgeSection) => {
-    const row = section.rows.find(isMore);
-    return row ? Number(/\d+/.exec(row.text)![0]) : 0;
-  };
-  // A section with a "+N more" line can give one more row. One without it needs three rows to give one.
-  const eligible = (section: FridgeSection) => (carried(section) > 0 ? shown(section).length >= 2 : section.rows.length >= 3);
-  const protectedSection = (section: FridgeSection) => section.rows.some((row) => row.ink === "yellow") || section.label === "Routines";
-  while (out.reduce((sum, section) => sum + sectionHeight(section), 0) > ROOM) {
-    let index = -1;
-    for (let i = out.length - 1; i >= 0 && index < 0; i--) if (!protectedSection(out[i]!) && eligible(out[i]!)) index = i;
-    for (let i = out.length - 1; i >= 0 && index < 0; i--) if (eligible(out[i]!)) index = i;
-    if (index < 0) break;
-    const section = out[index]!;
-    const rows = shown(section);
-    const before = carried(section);
-    section.rows = before > 0 ? [...rows.slice(0, rows.length - 1), more(before + 1)] : [...rows.slice(0, rows.length - 2), more(2)];
-  }
-  return out;
+function fitItems(items: FridgeItem[], rows = PANE_ROWS): FridgeItem[] {
+  if (items.length <= rows) return items;
+  const keep = Math.max(0, rows - 1);
+  return [...items.slice(0, keep), { time: "", text: `+${items.length - keep} more` }];
 }
 
 function dayKey(now: Date, timeZone: string, offset: number): string {
@@ -270,11 +341,7 @@ function dayAndClock(item: EntityView, timeZone: string): string {
   return `${zone.weekday}${time}`;
 }
 
-/**
- * Today's routines, one row for each person: what is left, or "all done". The row changes when a child checks in,
- * so the picture changes too, and the fridge shows it at its next refresh.
- */
-function routinesTail(all: EntityView[], links: SourcedLink[], zone: { dateKey: string; weekday: string }, used: string[], tail: FridgeSection[]) {
+function routineItems(all: EntityView[], links: SourcedLink[], zone: { dateKey: string; weekday: string }, used: string[]): FridgeItem[] {
   const byPerson = new Map<string, { name: string; left: string[]; total: number }>();
   for (const habit of all) {
     if (habit.type !== "habit" || habit.status === "paused" || !dueOn(routineDays(habit.properties.days), zone.weekday)) continue;
@@ -286,11 +353,15 @@ function routinesTail(all: EntityView[], links: SourcedLink[], zone: { dateKey: 
       used.push(habit.id);
     }
   }
-  if (!byPerson.size) return;
-  const rows = [...byPerson.values()]
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((entry): FridgeRow => ({ time: "", text: `${entry.name}: ${entry.left.length ? entry.left.join(", ") : "all done"}`, ink: "black" }));
-  tail.push({ label: "Routines", rows });
+  const items: FridgeItem[] = [];
+  for (const entry of byPerson.values()) {
+    items.push({
+      time: entry.name,
+      text: entry.left.length ? entry.left.join(", ") : "all done",
+      mark: entry.left.length ? "left" : undefined,
+    });
+  }
+  return items;
 }
 
 /** The list with open items whose newest item is the newest, and its open items in the order they were added. */
@@ -325,6 +396,18 @@ const WHITE = 1;
 const RED = 2;
 const YELLOW = 3;
 
+const MARGIN = 12;
+const HEADER_Y = 10;
+const HEADER_H = 44;
+const BAND_Y = 56;
+const BAND_H = 4;
+const GAP = 12;
+const CARD_Y = 72;
+const CARD_R = 16;
+const CARD_PAD = 16;
+const CARD_W = (OG.width - MARGIN * 3) / 2;
+const CARD_H = (OG.height - CARD_Y - MARGIN - GAP) / 2;
+
 export type FridgePalette = "bwry" | "bw";
 
 /**
@@ -334,41 +417,148 @@ export type FridgePalette = "bwry" | "bw";
 export function renderFridge(screen: FridgeScreen, palette: FridgePalette): Buffer {
   const { width, height } = OG;
   const canvas = new Uint8Array(width * height).fill(WHITE);
-  const margin = 28;
   if (screen.pairing) {
-    drawPairing(canvas, width, height, margin, screen.pairing);
+    drawPairing(canvas, width, height, screen.pairing);
     return encodeCanvas(canvas, width, height, palette);
   }
-  // The title, large, and the date at the right.
-  text(canvas, width, height, screen.title, margin, 22, BLACK, 3);
-  const date = clean(screen.date_label);
-  text(canvas, width, height, date, width - margin - date.length * GLYPH_W * 2, 34, BLACK, 2);
-  // The one yellow line of the screen, under the title.
-  rect(canvas, width, margin, 78, width - margin * 2, 6, YELLOW);
-  let y = 100;
-  for (const section of screen.sections) {
-    // A section with no label is the screen's own list: the title already names it.
-    if (section.label) {
-      text(canvas, width, height, section.label.toUpperCase(), margin, y, BLACK, 1);
-      y += 22;
+  const panes = screen.panes;
+  // Header: the official mark, the window title in Plex Sans, the date in Plex Mono.
+  drawMark(canvas, width, height, MARK_40, MARGIN, HEADER_Y + Math.floor((HEADER_H - MARK_40.size) / 2), BLACK);
+  const titleX = MARGIN + MARK_40.size + 12;
+  const titleFace = faces.sansSemibold32;
+  const titleY = HEADER_Y + Math.floor((HEADER_H - titleFace.height) / 2);
+  drawText(canvas, width, height, titleFace, screen.title, titleX, titleY, BLACK);
+  const dateFace = faces.monoMedium18;
+  const date = screen.date_label;
+  const dateW = measure(dateFace, date);
+  const dateY = HEADER_Y + Math.floor((HEADER_H - dateFace.height) / 2);
+  drawText(canvas, width, height, dateFace, date, width - MARGIN - dateW, dateY, BLACK);
+  // The one Garden band of the screen, in yellow: colour as a stripe, never as the words.
+  fillRect(canvas, width, height, MARGIN, BAND_Y, width - MARGIN * 2, BAND_H, YELLOW);
+
+  const slots: Array<{ x: number; y: number }> = [
+    { x: MARGIN, y: CARD_Y },
+    { x: MARGIN + CARD_W + GAP, y: CARD_Y },
+    { x: MARGIN, y: CARD_Y + CARD_H + GAP },
+    { x: MARGIN + CARD_W + GAP, y: CARD_Y + CARD_H + GAP },
+  ];
+  for (let i = 0; i < 4; i++) {
+    const pane = panes[i];
+    const slot = slots[i]!;
+    if (!pane) {
+      strokeRoundRect(canvas, width, height, slot.x, slot.y, CARD_W, CARD_H, CARD_R, BLACK, 2);
+      continue;
     }
-    // The time column is as wide as the longest time of the section, and one space more.
-    const column = Math.max(0, ...section.rows.map((row) => clean(row.time).length));
-    for (const row of section.rows) {
-      if (y > height - 44) break;
-      // A yellow row is a highlight: a yellow band with black text. Yellow text on white is not readable.
-      if (row.ink === "yellow") rect(canvas, width, margin - 8, y - 6, width - (margin - 8) * 2, GLYPH_H * 2 + 12, YELLOW);
-      const ink = row.ink === "red" ? RED : BLACK;
-      const time = clean(row.time);
-      if (time.trim()) text(canvas, width, height, time, margin, y, ink, 2);
-      const left = margin + (column ? (column + 1) * GLYPH_W * 2 : 0);
-      const room = Math.floor((width - margin - left) / (GLYPH_W * 2));
-      text(canvas, width, height, ellipsis(clean(row.text), room), left, y, row.ink === "red" ? RED : BLACK, 2);
-      y += 40;
-    }
-    y += 8;
+    drawPane(canvas, width, height, pane, slot.x, slot.y, CARD_W, CARD_H);
   }
   return encodeCanvas(canvas, width, height, palette);
+}
+
+function drawPane(
+  canvas: Uint8Array,
+  width: number,
+  height: number,
+  pane: FridgePane,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
+  if (pane.tone === "dark") {
+    fillRoundRect(canvas, width, height, x, y, w, h, CARD_R, BLACK);
+    const ink = WHITE;
+    let cy = y + CARD_PAD;
+    if (pane.kicker) {
+      const markColor = pane.mark === "due" || pane.mark === "now" || pane.mark === "left" ? RED : pane.mark === "list" ? YELLOW : YELLOW;
+      if (pane.mark || pane.kicker !== "HMN") {
+        fillRect(canvas, width, height, x + CARD_PAD, cy + 5, 8, 8, pane.mark ? markColor : YELLOW);
+      }
+      drawText(canvas, width, height, faces.monoMedium14, pane.kicker.toUpperCase(), x + CARD_PAD + (pane.mark || pane.kicker !== "HMN" ? 16 : 0), cy, ink, w - CARD_PAD * 2 - 16);
+      cy += faces.monoMedium14.height + 4;
+    }
+    if (pane.time) {
+      drawText(canvas, width, height, faces.sansSemibold48, pane.time, x + CARD_PAD, cy, ink, w - CARD_PAD * 2);
+      cy += faces.sansSemibold48.height - 8;
+    }
+    if (pane.title) {
+      drawText(canvas, width, height, faces.sansSemibold24, pane.title, x + CARD_PAD, cy, ink, w - CARD_PAD * 2);
+      cy += faces.sansSemibold24.height + 2;
+    }
+    if (pane.subtitle) {
+      drawText(canvas, width, height, faces.sansRegular16, pane.subtitle, x + CARD_PAD, cy, ink, w - CARD_PAD * 2);
+      cy += faces.sansRegular16.height + 8;
+    }
+    for (const row of pane.items) {
+      if (cy + 22 > y + h - 12) break;
+      const timeFace = faces.monoMedium18;
+      const textFace = faces.sansRegular16;
+      let tx = x + CARD_PAD;
+      if (row.time) {
+        drawText(canvas, width, height, timeFace, row.time, tx, cy, ink);
+        tx += Math.max(measure(timeFace, "00:00"), measure(timeFace, row.time)) + 10;
+      }
+      drawText(canvas, width, height, textFace, row.text, tx, cy + 2, ink, w - CARD_PAD - (tx - x));
+      cy += 26;
+    }
+    return;
+  }
+
+  strokeRoundRect(canvas, width, height, x, y, w, h, CARD_R, BLACK, 2);
+  if (pane.accent === "yellow") {
+    // A yellow rail on the list card: colour as an element, words stay black.
+    fillRoundRect(canvas, width, height, x + 3, y + 3, 10, h - 6, 8, YELLOW);
+    fillRect(canvas, width, height, x + 8, y + 3, 5, h - 6, YELLOW);
+  }
+  const innerLeft = x + CARD_PAD + (pane.accent === "yellow" ? 6 : 0);
+  const innerRoom = w - CARD_PAD * 2 - (pane.accent === "yellow" ? 6 : 0);
+  let cy = y + 12;
+  if (pane.label) {
+    drawText(canvas, width, height, faces.monoMedium14, pane.label.toUpperCase(), innerLeft, cy, BLACK, innerRoom);
+    cy += faces.monoMedium14.height + 8;
+  }
+  if (!pane.items.length) {
+    const line = pane.empty ?? "";
+    if (line) drawText(canvas, width, height, faces.sansRegular16, line, innerLeft, cy, BLACK, innerRoom);
+    return;
+  }
+  const pitch = 34;
+  for (const row of pane.items) {
+    if (cy + 24 > y + h - 10) break;
+    drawRow(canvas, width, height, row, innerLeft, cy, innerRoom);
+    cy += pitch;
+  }
+}
+
+function drawRow(
+  canvas: Uint8Array,
+  width: number,
+  height: number,
+  row: FridgeItem,
+  x: number,
+  y: number,
+  room: number,
+) {
+  let textX = x;
+  if (row.mark === "now" || row.mark === "due" || row.mark === "left") {
+    fillRect(canvas, width, height, x, y + 8, 8, 8, RED);
+    textX = x + 16;
+  } else if (row.mark === "list") {
+    fillRect(canvas, width, height, x, y + 8, 8, 8, YELLOW);
+    textX = x + 16;
+  } else if (row.mark === "open") {
+    strokeCircle(canvas, width, height, x + 4, y + 12, 5, BLACK, 2);
+    textX = x + 16;
+  }
+  const textFace = faces.sansMedium20;
+  const timeFace = faces.monoMedium18;
+  const time = row.time;
+  if (time) {
+    drawText(canvas, width, height, timeFace, time, textX, y + 1, BLACK);
+    const col = Math.max(measure(timeFace, "00:00"), measure(timeFace, time));
+    drawText(canvas, width, height, textFace, row.text, textX + col + 12, y, BLACK, room - (textX - x) - col - 12);
+  } else {
+    drawText(canvas, width, height, textFace, row.text, textX, y, BLACK, room - (textX - x));
+  }
 }
 
 function encodeCanvas(canvas: Uint8Array, width: number, height: number, palette: FridgePalette): Buffer {
@@ -385,74 +575,30 @@ function encodeCanvas(canvas: Uint8Array, width: number, height: number, palette
  * The pairing screen: a QR code at the left, black on white with a white quiet zone, and the words at the right.
  * Yellow stays off the code: a phone camera reads yellow as light, but a black and white panel draws it white.
  */
-function drawPairing(canvas: Uint8Array, width: number, height: number, margin: number, pairing: NonNullable<FridgeScreen["pairing"]>) {
+function drawPairing(canvas: Uint8Array, width: number, height: number, pairing: NonNullable<FridgeScreen["pairing"]>) {
   const title = pairing.name ? `${pairing.name}'s phone` : "Pair a phone";
   const until = `until ${pairing.until}`;
-  const titleRoom = Math.floor((width - margin * 2 - until.length * GLYPH_W * 2 - 24) / (GLYPH_W * 3));
-  text(canvas, width, height, ellipsis(clean(title), titleRoom), margin, 22, BLACK, 3);
-  text(canvas, width, height, until, width - margin - until.length * GLYPH_W * 2, 34, BLACK, 2);
-  rect(canvas, width, margin, 78, width - margin * 2, 6, YELLOW);
+  drawMark(canvas, width, height, MARK_40, MARGIN, HEADER_Y + 2, BLACK);
+  const titleFace = faces.sansSemibold32;
+  const dateFace = faces.monoMedium18;
+  drawText(canvas, width, height, titleFace, title, MARGIN + MARK_40.size + 12, HEADER_Y + 2, BLACK, width - MARGIN * 2 - MARK_40.size - 12 - measure(dateFace, until) - 16);
+  drawText(canvas, width, height, dateFace, until, width - MARGIN - measure(dateFace, until), HEADER_Y + 10, BLACK);
+  fillRect(canvas, width, height, MARGIN, BAND_Y, width - MARGIN * 2, BAND_H, YELLOW);
   const qr = encodeQr(pairing.payload);
-  // Four modules of quiet zone above the code, and as large a module as fits under the yellow line.
-  const top = 108;
+  const top = 80;
   const module = Math.max(3, Math.min(9, Math.floor((height - top - 20) / qr.size)));
-  const left = margin;
+  const left = MARGIN;
   for (let y = 0; y < qr.size; y++) {
     for (let x = 0; x < qr.size; x++) {
-      if (qr.dark[y]![x]) rect(canvas, width, left + x * module, top + y * module, module, module, BLACK);
+      if (qr.dark[y]![x]) fillRect(canvas, width, height, left + x * module, top + y * module, module, module, BLACK);
     }
   }
-  const column = left + qr.size * module + 40;
-  const lines: Array<[string, number]> = [
-    ["Open the camera", BLACK],
-    ["and point it here.", BLACK],
-    ["", BLACK],
-    ["HMN opens and", BLACK],
-    ["pairs the phone.", BLACK],
-    ["", BLACK],
-    ["Works once.", RED],
-  ];
-  const room = Math.floor((width - margin - column) / (GLYPH_W * 2));
+  const column = left + qr.size * module + 32;
+  const lines = ["Open the camera", "and point it here.", "", "HMN opens and", "pairs the phone.", "", "Works once."];
   let y = top + 8;
-  for (const [line, ink] of lines) {
-    if (line) text(canvas, width, height, ellipsis(line, room), column, y, ink, 2);
-    y += 40;
+  for (const line of lines) {
+    if (line) drawText(canvas, width, height, faces.sansMedium20, line, column, y, BLACK, width - MARGIN - column);
+    y += 36;
   }
 }
 
-function clean(value: string): string {
-  return [...value].map((ch) => (GLYPHS[ch] ? ch : ch === "·" ? "-" : ch === "—" || ch === "–" ? "-" : " ")).join("");
-}
-
-function ellipsis(value: string, room: number): string {
-  if (value.length <= room) return value;
-  return `${value.slice(0, Math.max(0, room - 3)).trimEnd()}...`;
-}
-
-function rect(canvas: Uint8Array, width: number, x: number, y: number, w: number, h: number, ink: number) {
-  const height = canvas.length / width;
-  for (let py = y; py < y + h && py < height; py++) {
-    for (let px = x; px < x + w && px < width; px++) canvas[py * width + px] = ink;
-  }
-}
-
-function text(canvas: Uint8Array, width: number, height: number, value: string, x: number, y: number, ink: number, scale: number) {
-  let cursor = x;
-  for (const ch of clean(value)) {
-    const glyph = GLYPHS[ch] ?? [];
-    for (let gy = 0; gy < GLYPH_H; gy++) {
-      const bits = glyph[gy] ?? 0;
-      for (let gx = 0; gx < GLYPH_W; gx++) {
-        if ((bits & (1 << (GLYPH_W - 1 - gx))) === 0) continue;
-        for (let sy = 0; sy < scale; sy++) {
-          for (let sx = 0; sx < scale; sx++) {
-            const px = cursor + gx * scale + sx;
-            const py = y + gy * scale + sy;
-            if (px >= 0 && py >= 0 && px < width && py < height) canvas[py * width + px] = ink;
-          }
-        }
-      }
-    }
-    cursor += GLYPH_W * scale;
-  }
-}

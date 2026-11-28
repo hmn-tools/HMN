@@ -208,17 +208,17 @@ The fridge is a **TRMNL BWRY**: the OG hardware with a four-colour panel. Facts 
 What this means for the design:
 
 - **Few refreshes.** A colour refresh is slow and it flashes. The fridge changes at the start of each time window, and when the content of the current screen changes. It does not rotate every few minutes.
-- **Colour with a meaning.** Black for text. Red for "now and today": the next start, a task that is due today. Yellow for one highlight: a birthday, the grocery list. A screen uses red and yellow sparingly, as the Garden accents are on the phone.
-- **Large type.** 800 × 480 is small at two metres. At most six rows on a screen, at a large size.
+- **Colour with a meaning.** Black or white for text, never red or yellow words. Red is a mark for now and today: the next start, a task due today, a leftover routine. Yellow is one highlight: the Garden band under the title, and a rail on the grocery list. A screen uses red and yellow sparingly, as the Garden accents are on the phone, and colour is never the only signal.
+- **Large type, in segments.** 800 × 480 is a large kitchen panel, but it is read from a few metres. The screen is four cards, like the iOS widget, with the official mark in the header and one dark focus pane (white on black) for this moment. Type stays large enough to read across the room; a pane that cannot show every row ends with "+N more".
 - **A test first.** HMN draws 1-bit BMP and grey PNG now. Red and yellow need a palette PNG. The first job when the device arrives is to read its setup call and to draw one test image with the four inks.
 
 The fridge shows the Household tier only, and it changes by the time of day. The owner said on 23/11/2026: try it, there is a lot to show. These are the first screens. Each one is a test, and the household's use decides what stays.
 
 | Time | Screen | Content |
 | --- | --- | --- |
-| 06:00 to 09:00 | This morning | Today for each person, in columns: where, when, who takes whom. Family tasks due today in red. |
+| 06:00 to 09:00 | This morning | The first part of the day: the next or current start in the focus pane, who they are with, family tasks due today, and the children's routines. Timed events from 16:00 wait for This evening. |
 | 09:00 to 16:00 | This week | The household calendar for seven days. Family tasks with a date this week. |
-| 16:00 to 21:00 | Tonight and tomorrow | Dinner, tomorrow's early starts, the grocery list in yellow. |
+| 16:00 to 21:00 | This evening | Dinner in the focus pane, tomorrow's early start, the children's routines, and the grocery list on a yellow rail. Tomorrow's first start keeps a row when the panel is full. |
 | 21:00 to 06:00 | Quiet | The date and tomorrow's first event. |
 
 Other blocks to try in these screens: the next birthday in the family, school term dates, the next fixture of a team you follow, a short note that a member leaves on the fridge, the bin day, and the weather. Weather and the bin day are world data that sit beside an HMN screen. They are not part of the record (STRATEGY.md, the read contract).
@@ -260,7 +260,7 @@ The names are the people of the demonstration data.
 - 07:20. Sam completes the form step of the passport task in the household app. The fridge shows it at the next refresh. The record keeps Sam's name on the step.
 - 12:40. The owner shares a school email to HMN. It is an inbox item. An agent proposes an event "Sports day, Fri 4 Dec" for Yves at Household. The owner approves it on Review in one tap.
 - 17:30. Sam adds "milk" to the grocery list. A rule accepts it.
-- 18:00. The fridge shows "Tonight and tomorrow": dinner, the 07:30 start tomorrow, and the grocery list with milk.
+- 18:00. The fridge shows "This evening": dinner, leftover tasks, the 07:30 start tomorrow, and the grocery list with milk.
 - 21:00. The owner's Today shows the work task that is due, and nothing of the household logistics that the fridge already said.
 
 ## 7. What changes in the code

@@ -152,20 +152,20 @@ test("the fridge shows what is left of each child's routines, and 'all done'", a
     const cat = await routine(app, "Feed the cat", kid);
     await routine(app, "Pack the school bag", kid, ["mon", "tue", "wed", "thu", "fri"]);
     await routine(app, "Example Sunday routine", kid, ["sun"]);
-    let rows = fridge("morning").sections.find((item) => item.label === "Routines")!.rows;
-    expect(rows.map((row) => row.text)).toEqual(["Example Kid: Feed the cat, Pack the school bag"]);
+    let rows = fridge("morning").panes.find((item) => item.id === "routines")!.items;
+    expect(rows).toEqual([{ time: "Example Kid", text: "Feed the cat, Pack the school bag", mark: "left" }]);
 
     const kidKey = await pairMember(app, kid, "child");
     await call(app, `/api/v1/habits/${cat.habit.id}/check-in`, { method: "POST", ...as(kidKey) });
-    rows = fridge("morning").sections.find((item) => item.label === "Routines")!.rows;
-    expect(rows.map((row) => row.text)).toEqual(["Example Kid: Pack the school bag"]);
+    rows = fridge("morning").panes.find((item) => item.id === "routines")!.items;
+    expect(rows).toEqual([{ time: "Example Kid", text: "Pack the school bag", mark: "left" }]);
 
     // 18:00: the evening screen. The bag is packed.
     clock.now = new Date("2026-11-12T10:00:00.000Z");
     const bag = ((await call(app, "/api/v1/routines", owner(app))).json as { routines: Routine[] }).routines.find((entry) => entry.habit.title === "Pack the school bag")!;
     await call(app, `/api/v1/habits/${bag.habit.id}/check-in`, { method: "POST", ...as(kidKey) });
-    rows = fridge("evening").sections.find((item) => item.label === "Routines")!.rows;
-    expect(rows.map((row) => row.text)).toEqual(["Example Kid: all done"]);
+    rows = fridge("evening").panes.find((item) => item.id === "routines")!.items;
+    expect(rows).toEqual([{ time: "Example Kid", text: "all done" }]);
   } finally {
     app.close();
   }

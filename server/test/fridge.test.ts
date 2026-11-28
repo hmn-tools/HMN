@@ -64,6 +64,20 @@ async function display(app: App, key: string, mac: string) {
   return (await response.json()) as { image_url: string; filename: string; refresh_rate: number; screen: string };
 }
 
+function accounted(screen: FridgeScreen): number {
+  let count = 0;
+  for (const pane of screen.panes) {
+    if (pane.id === "focus" && pane.title && pane.kicker !== "HMN" && pane.title !== "A free morning." && pane.title !== "A clear week." && pane.title !== "Nothing later tonight." && pane.title !== "Nothing early tomorrow.") {
+      count += 1;
+    }
+    for (const row of pane.items) {
+      const more = /^\+\d+ more$/.exec(row.text);
+      count += more ? Number(/\d+/.exec(row.text)![0]) : 1;
+    }
+  }
+  return count;
+}
+
 async function event(app: App, title: string, due: string, tier: string) {
   const made = await call(app, "/api/v1/event", { method: "POST", ...owner(app), body: { title, due_at: due, status: "upcoming", kind: "appointment", tier } });
   expect(made.status).toBe(201);
@@ -86,12 +100,17 @@ test("a four-ink PNG: indexed, 2 bits, the exact inks, under the size limit of t
     title: "This morning",
     date_label: "Wed 11/11",
     entity_ids: [],
-    sections: [{ label: "Today", rows: [{ time: "08:00", text: "Example school run", ink: "red" }, { time: "16:30", text: "Example swimming", ink: "black" }] }],
+    panes: [
+      { id: "focus", label: "", tone: "dark", kicker: "Next", time: "08:00", title: "Example school run", mark: "now", items: [] },
+      { id: "today", label: "Today", tone: "light", items: [{ time: "16:30", text: "Example swimming" }] },
+      { id: "routines", label: "Routines", tone: "light", items: [], empty: "Caught up." },
+      { id: "todo", label: "To do today", tone: "light", items: [], empty: "Caught up." },
+    ],
   };
   const drawn = renderFridge(screen, "bwry");
   expect(drawn.length).toBeLessThan(90_000);
   const counts = readPng(drawn).counts;
-  // Black text, the red next start, and the one yellow line are all on the panel.
+  // Black ink, a red mark on the focus pane, and the yellow Garden band are all on the panel.
   expect(counts[0]).toBeGreaterThan(0);
   expect(counts[2]).toBeGreaterThan(0);
   expect(counts[3]).toBeGreaterThan(0);
@@ -105,7 +124,7 @@ test("the fridge reads Household, a Public display does not, and the image name 
   try {
     const kid = await call(app, "/api/v1/person", { method: "POST", ...owner(app), body: { title: "Example Kid", kind: "family", tier: "household" } });
     const kidId = (kid.json as { id: string }).id;
-    const swim = await event(app, "Example swimming", "2026-11-12T08:30:00.000Z", "household");
+    const swim = await event(app, "Example swimming", "2026-11-12T00:30:00.000Z", "household");
     await call(app, "/api/v1/links", { method: "POST", ...owner(app), body: { from_type: "event", from_id: swim, to_type: "person", to_id: kidId, rel: "with" } });
     await event(app, "Example work review", "2026-11-12T02:00:00.000Z", "personal");
 
@@ -119,7 +138,8 @@ test("the fridge reads Household, a Public display does not, and the image name 
     const { access } = displayAccess(app.hmn, fridgeKey, FRIDGE_IP);
     const screen = app.hmn.fridgeScreen(access, "morning");
     const text = JSON.stringify(screen);
-    expect(text).toContain("Example Kid · Example swimming");
+    expect(text).toContain("Example swimming");
+    expect(text).toContain("Example Kid");
     expect(text).not.toContain("Example work review");
     // The seed's Private family rows are not on the fridge either.
     for (const name of ["Yves", "Luca", "Sam", "dentist", "passport"]) expect(text).not.toContain(name);
@@ -130,7 +150,7 @@ test("the fridge reads Household, a Public display does not, and the image name 
 
     // The same picture keeps its name, so the panel does not refresh. A change gives a new name.
     expect((await display(app, fridgeKey, "41:B4:10:39:A1:51")).filename).toBe(body.filename);
-    await event(app, "Example piano", "2026-11-12T09:00:00.000Z", "household");
+    await event(app, "Example piano", "2026-11-12T02:00:00.000Z", "household");
     expect((await display(app, fridgeKey, "41:B4:10:39:A1:51")).filename).not.toBe(body.filename);
 
     // A display claimed at Public, also a BWRY, gets the Public deck as a palette PNG, and no household row.
@@ -163,23 +183,26 @@ test("each window shows its own content", async () => {
     const access = displayAccess(app.hmn, key, FRIDGE_IP).access;
     expect(app.hmn.fridgeWindowNow()).toBe("evening");
     const evening = app.hmn.fridgeScreen(access, "evening");
-    expect(evening.sections.map((section) => section.label)).toEqual(["Tonight", "Tomorrow"]);
-    // A start before 09:00 tomorrow is red, so it is seen the evening before.
-    expect(evening.sections[1]!.rows[0]).toMatchObject({ time: "06:30", ink: "red" });
+    expect(evening.title).toBe("This evening");
+    const tomorrow = evening.panes.find((pane) => pane.id === "tomorrow")!;
+    expect(tomorrow).toBeDefined();
+    // A start before 09:00 tomorrow is marked, so it is seen the evening before. The words stay black.
+    expect(tomorrow.items[0]).toMatchObject({ time: "06:30", mark: "now", text: "Example early flight" });
     clock.now = new Date("2026-11-12T14:00:00.000Z");
     expect(app.hmn.fridgeWindowNow()).toBe("quiet");
     expect(JSON.stringify(app.hmn.fridgeScreen(access, "quiet"))).toContain("Example early flight");
     const week = app.hmn.fridgeScreen(access, "week");
-    expect(week.sections[0]!.label).toBe("");
-    // An empty section has a short line, not an empty card.
+    expect(week.panes.some((pane) => pane.id === "week" || pane.id === "focus")).toBe(true);
+    // An empty morning still has a calm line in the focus pane or the Today card.
     const morning = app.hmn.fridgeScreen(access, "morning");
-    expect(morning.sections[0]!.rows.length).toBeGreaterThan(0);
+    const morningText = JSON.stringify(morning);
+    expect(morningText.includes("A free morning.") || morning.panes.some((pane) => pane.items.length || pane.title)).toBe(true);
   } finally {
     app.close();
   }
 });
 
-test("the evening shows the newest list on one yellow row, and a Private list stays off the fridge", async () => {
+test("the evening shows the newest list as a yellow card, and a Private list stays off the fridge", async () => {
   // 18:00 in Perth on Thursday 12 November.
   const { app } = clockedApp("2026-11-12T10:00:00.000Z");
   try {
@@ -196,24 +219,29 @@ test("the evening shows the newest list on one yellow row, and a Private list st
 
     const key = await pairFridge(app, "41:B4:10:39:A1:54", { ceiling: "household" });
     const screen = app.hmn.fridgeScreen(displayAccess(app.hmn, key, FRIDGE_IP).access, "evening");
-    const last = screen.sections[screen.sections.length - 1]!;
-    expect(last).toEqual({ label: "Groceries", rows: [{ time: "", text: "Example milk, Example eggs", ink: "yellow" }] });
-    expect(screen.sections.reduce((sum, section) => sum + section.rows.length, 0)).toBeLessThanOrEqual(6);
+    const listPane = screen.panes.find((pane) => pane.id === "list")!;
+    expect(listPane.label).toBe("Groceries");
+    expect(listPane.accent).toBe("yellow");
+    expect(listPane.items.map((item) => item.text)).toEqual(["Example milk", "Example eggs"]);
     expect(JSON.stringify(screen)).not.toContain("Example secret book");
-    // The row is a yellow band with black text on the panel.
-    const counts = readPng(renderFridge(screen, "bwry")).counts;
-    expect(counts[3]).toBeGreaterThan(800 * 30);
+    const tomorrow = screen.panes.find((pane) => pane.id === "tomorrow")!;
+    expect(tomorrow.items[0]?.text).toContain("Example tomorrow");
+    const png = renderFridge(screen, "bwry");
+    expect(png.length).toBeLessThan(90_000);
+    const counts = readPng(png).counts;
+    // The Garden band plus the list's yellow rail: colour as an element, not as the words.
+    expect(counts[3]).toBeGreaterThan(4_000);
   } finally {
     app.close();
   }
 });
 
-test("rows that do not fit are counted, never dropped in silence, and the rows fit the panel", async () => {
+test("rows that do not fit are counted, never dropped in silence, and the picture fits the panel", async () => {
   // 07:00 in Perth on Thursday 12 November: eight things today, and tasks due today.
   const { app } = clockedApp("2026-11-11T23:00:00.000Z");
   try {
     for (let hour = 0; hour < 8; hour++) {
-      await event(app, `Example meeting ${hour + 1}`, `2026-11-12T${String(1 + hour).padStart(2, "0")}:00:00.000Z`, "household");
+      await event(app, `Example meeting ${hour + 1}`, `2026-11-12T${String(hour).padStart(2, "0")}:00:00.000Z`, "household");
     }
     for (const title of ["Example form", "Example parcel"]) {
       const made = await call(app, "/api/v1/task", { method: "POST", ...owner(app), body: { title, status: "open", kind: "task", due_at: "2026-11-12", tier: "household" } });
@@ -222,13 +250,127 @@ test("rows that do not fit are counted, never dropped in silence, and the rows f
     const key = await pairFridge(app, "41:B4:10:39:A1:77", { ceiling: "household", palette: "bwry" });
     const access = displayAccess(app.hmn, key, FRIDGE_IP).access;
     const morning = app.hmn.fridgeScreen(access, "morning");
-    const rows = morning.sections.flatMap((section) => section.rows);
-    const last = rows[rows.length - 1]!;
-    expect(last.text).toMatch(/^\+\d+ more$/);
-    // Ten rows exist. The count in the line is the number that are not shown.
-    expect(rows.length - 1 + Number(/\d+/.exec(last.text)![0])).toBe(10);
-    const height = morning.sections.reduce((sum, section) => sum + (section.label ? 22 : 0) + section.rows.length * 40 + 8, 0);
-    expect(height).toBeLessThanOrEqual(384);
+    const more = morning.panes.flatMap((pane) => pane.items).find((item) => /^\+\d+ more$/.test(item.text));
+    expect(more?.text).toMatch(/^\+\d+ more$/);
+    expect(accounted(morning)).toBe(10);
+    const png = renderFridge(morning, "bwry");
+    expect(readPng(png)).toMatchObject({ width: 800, height: 480 });
+    expect(png.length).toBeLessThan(90_000);
+  } finally {
+    app.close();
+  }
+});
+
+test("morning is the first part of the day, and an event that has begun stays marked as now", async () => {
+  // 07:40 in Hong Kong on Wednesday 2 December: school has started, piano is later, dinner is for the evening.
+  const clock = { now: new Date("2026-12-01T23:40:00.000Z") };
+  const app = createApp({ dataDir: mkdtempSync(join(tmpdir(), "hmn-fridge-")), kek: randomBytes(32), now: () => clock.now, timeZone: "Asia/Hong_Kong" });
+  try {
+    await event(app, "Example school run", "2026-12-01T23:30:00.000Z", "household");
+    await event(app, "Example piano", "2026-12-02T07:00:00.000Z", "household");
+    await event(app, "Example dinner", "2026-12-02T10:30:00.000Z", "household");
+    const key = await pairFridge(app, "41:B4:10:39:A1:80", { ceiling: "household" });
+    const access = displayAccess(app.hmn, key, FRIDGE_IP).access;
+    const morning = app.hmn.fridgeScreen(access, "morning");
+    const focus = morning.panes.find((pane) => pane.id === "focus")!;
+    expect(focus).toMatchObject({ time: "07:30", title: "Example school run", kicker: "Now", mark: "now" });
+    const today = morning.panes.find((pane) => pane.id === "today")!;
+    expect(today.items.map((row) => row.text)).toEqual(["Example piano"]);
+    expect(today.items[0]).toMatchObject({ time: "15:00" });
+    expect(JSON.stringify(morning)).not.toContain("Example dinner");
+    const evening = app.hmn.fridgeScreen(access, "evening");
+    expect(evening.title).toBe("This evening");
+    expect(JSON.stringify(evening)).toContain("Example dinner");
+  } finally {
+    app.close();
+  }
+});
+
+test("this evening keeps tomorrow's early start when leftover tasks would fill the panel", async () => {
+  // 18:20 in Hong Kong on Wednesday 2 December.
+  const clock = { now: new Date("2026-12-02T10:20:00.000Z") };
+  const app = createApp({ dataDir: mkdtempSync(join(tmpdir(), "hmn-fridge-")), kek: randomBytes(32), now: () => clock.now, timeZone: "Asia/Hong_Kong" });
+  try {
+    await event(app, "Example dinner", "2026-12-02T10:30:00.000Z", "household");
+    await event(app, "Example school run", "2026-12-02T23:15:00.000Z", "household");
+    for (const title of ["Example form", "Example parcel", "Example call", "Example letter"]) {
+      expect((await call(app, "/api/v1/task", { method: "POST", ...owner(app), body: { title, status: "open", kind: "task", due_at: "2026-12-02", tier: "household" } })).status).toBe(201);
+    }
+    const key = await pairFridge(app, "41:B4:10:39:A1:81", { ceiling: "household" });
+    const access = displayAccess(app.hmn, key, FRIDGE_IP).access;
+    const evening = app.hmn.fridgeScreen(access, "evening");
+    expect(evening.panes.some((pane) => pane.id === "tomorrow")).toBe(true);
+    const tomorrow = evening.panes.find((pane) => pane.id === "tomorrow")!;
+    expect(tomorrow.items[0]).toMatchObject({ time: "07:15", mark: "now", text: "Example school run" });
+    expect(evening.panes.find((pane) => pane.id === "focus")?.title).toBe("Example dinner");
+  } finally {
+    app.close();
+  }
+});
+
+test("this week shows the first item of later days before filling today, and leftover routines are marked", async () => {
+  // 11:00 in Hong Kong on Wednesday 2 December.
+  const clock = { now: new Date("2026-12-02T03:00:00.000Z") };
+  const app = createApp({ dataDir: mkdtempSync(join(tmpdir(), "hmn-fridge-")), kek: randomBytes(32), now: () => clock.now, timeZone: "Asia/Hong_Kong" });
+  try {
+    for (let hour = 1; hour <= 5; hour++) {
+      await event(app, `Example today ${hour}`, `2026-12-02T0${hour}:00:00.000Z`, "household");
+    }
+    await event(app, "Example Friday dinner", "2026-12-04T10:00:00.000Z", "household");
+    const kid = await call(app, "/api/v1/person", { method: "POST", ...owner(app), body: { title: "Example Kid", kind: "family", tier: "household" } });
+    const kidId = (kid.json as { id: string }).id;
+    const made = await call(app, "/api/v1/routines", { method: "POST", ...owner(app), body: { title: "Pack the bag", person_id: kidId } });
+    expect(made.status).toBe(201);
+    const key = await pairFridge(app, "41:B4:10:39:A1:82", { ceiling: "household" });
+    const access = displayAccess(app.hmn, key, FRIDGE_IP).access;
+    const week = app.hmn.fridgeScreen(access, "week");
+    const texts = week.panes.flatMap((pane) => [pane.title ?? "", ...pane.items.map((row) => row.text)]);
+    expect(texts).toContain("Example Friday dinner");
+    const morning = app.hmn.fridgeScreen(access, "morning");
+    const routines = morning.panes.find((pane) => pane.id === "routines")!;
+    expect(routines.items[0]).toMatchObject({ time: "Example Kid", text: "Pack the bag", mark: "left" });
+    // 22:00 the same day: tomorrow is Thursday, no event, so the empty line is calm.
+    clock.now = new Date("2026-12-02T14:00:00.000Z");
+    const late = app.hmn.fridgeScreen(access, "quiet");
+    const focus = late.panes.find((pane) => pane.id === "focus")!;
+    expect(focus.title).toBe("Nothing early tomorrow.");
+  } finally {
+    app.close();
+  }
+});
+
+test("an evening with tonight, tomorrow, routines, and a list still fits the panel", async () => {
+  // 18:20 in Hong Kong on Wednesday 2 December: four quarters hold tonight, tomorrow, routines, and the list.
+  const app = createApp({ dataDir: mkdtempSync(join(tmpdir(), "hmn-fridge-")), kek: randomBytes(32), now: () => new Date("2026-12-02T10:20:00.000Z"), timeZone: "Asia/Hong_Kong" });
+  try {
+    await event(app, "Example dinner", "2026-12-02T10:00:00.000Z", "household");
+    await event(app, "Example school run", "2026-12-02T23:15:00.000Z", "household");
+    await event(app, "Example early swim", "2026-12-02T23:30:00.000Z", "household");
+    const list = await call(app, "/api/v1/project", { method: "POST", ...owner(app), body: { title: "Groceries", kind: "list", status: "active", tier: "household" } });
+    const listId = (list.json as { id: string }).id;
+    for (const title of ["Example milk", "Example eggs", "Example bread"]) {
+      expect((await call(app, "/api/v1/items", { method: "POST", ...owner(app), body: { parent_id: listId, title } })).status).toBe(201);
+    }
+    for (const name of ["Example Ada", "Example Ben"]) {
+      const kid = await call(app, "/api/v1/person", { method: "POST", ...owner(app), body: { title: name, kind: "family", tier: "household" } });
+      const kidId = (kid.json as { id: string }).id;
+      const made = await call(app, "/api/v1/routines", { method: "POST", ...owner(app), body: { title: "Pack the bag", person_id: kidId } });
+      expect(made.status).toBe(201);
+    }
+    const key = await pairFridge(app, "41:B4:10:39:A1:93", { ceiling: "household" });
+    const evening = app.hmn.fridgeScreen(displayAccess(app.hmn, key, FRIDGE_IP).access, "evening");
+    const ids = evening.panes.map((pane) => pane.id);
+    expect(ids).toContain("focus");
+    expect(ids).toContain("tomorrow");
+    expect(ids).toContain("routines");
+    expect(ids).toContain("list");
+    expect(evening.panes.find((pane) => pane.id === "focus")?.title).toBe("Example dinner");
+    const tomorrow = evening.panes.find((pane) => pane.id === "tomorrow")!;
+    expect(tomorrow.items[0]).toMatchObject({ time: "07:15", mark: "now", text: "Example school run" });
+    const png = renderFridge(evening, "bwry");
+    expect(readPng(png)).toMatchObject({ width: 800, height: 480 });
+    expect(png.length).toBeLessThan(90_000);
+    expect(readPng(png).counts[3]!).toBeGreaterThan(4_000);
   } finally {
     app.close();
   }

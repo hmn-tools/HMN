@@ -43,16 +43,16 @@ curl --cacert "$CA" -H "Authorization: Bearer $HMN_OWNER_KEY" -H "Content-Type: 
 ```
 
 - Its key is a read credential at Household. It is the only display key that reads above Public. Hide from the mini pushes it down to Public.
-- It shows four household screens, one for each time of day, in the owner's time zone: This morning (06:00), This week (09:00), Tonight and tomorrow (16:00), and Good night (21:00). [ONTOLOGY.md](ONTOLOGY.md), section 5.3, has the design.
+- It shows four household screens, one for each time of day, in the owner's time zone: This morning (06:00), This week (09:00), This evening (16:00), and Good night (21:00). [ONTOLOGY.md](ONTOLOGY.md), section 5.3, has the design.
 - The morning and evening screens show the children's routines that are due today, one row for each child: what is left, or "all done". A tick on a phone changes the picture, so the fridge shows it at its next refresh.
-- The evening screen ends with the list that changed last (a project of the kind `list`), its open items on one yellow row with black text. The list keeps its row when the evening is full. A list above Household is not on the fridge.
-- A screen has at most six rows, and the sections and their labels must fit the panel. Rows that do not fit are counted on the last section as "+N more", whatever section they were in. Routines and the list are cut last.
+- The evening screen gives the newest list (a project of the kind `list`) its own card, with a yellow rail and black text. The list keeps its pane when the evening is full. A list above Household is not on the fridge.
+- The screen is four Garden-style cards under a header with the HMN mark: a dark focus pane for this moment (white on black), and three light panes for the rest of the window. Type is IBM Plex, already in the server, drawn as 1-bit glyphs. Colour is for marks, a list rail, and one yellow band — not for the words themselves. A pane that cannot show every row ends with "+N more". The picture still fits 800×480.
 - The image name changes only when the picture changes, and the display asks again every ten minutes or at the next window. So the panel refreshes only for a change.
 - The image is `GET /api/trmnl/fridge.png` (or `.bmp` for a black and white panel). It answers 404 for every key that is not a household display.
 
 ### The TRMNL BWRY (black, white, red, yellow)
 
-The four-colour TRMNL sends `Model: og_4clr` (a newer board sends `og_gen2_4clr`). HMN then draws a 2-bit indexed PNG with the four exact inks, as TRMNL serves a colour image: black text, red for the next start and for a task due today, a yellow line under the title, and in the evening the list on a yellow band. A Public display on this panel gets the same deck as before, in black and white, as a palette PNG: a 1-bit BMP is not safe on this panel. To set the inks by hand, add `"palette": "bwry"` (or `"bw"`) to the claim. One colour refresh takes about 13 seconds.
+The four-colour TRMNL sends `Model: og_4clr` (a newer board sends `og_gen2_4clr`). HMN then draws a 2-bit indexed PNG with the four exact inks, as TRMNL serves a colour image: black or white text, red marks for now and due, a yellow Garden band under the title, and in the evening a yellow rail on the list card. A Public display on this panel gets the same deck as before, in black and white, as a palette PNG: a 1-bit BMP is not safe on this panel. To set the inks by hand, add `"palette": "bwry"` (or `"bw"`) to the claim. One colour refresh takes about 13 seconds.
 
 This was tested against the firmware's own test files and HMN's tests. It was not tested on a real BWRY panel.
 
@@ -97,7 +97,7 @@ A `GET /api/display` without the `ID` header is the older HMN payload: `image_ur
 
 ## Images
 
-Drawn with the bitmap font already in the server. No network call.
+Drawn with IBM Plex (Sans for titles and rows, Mono for labels and times) and the HMN mark already in the server, rasterized to 1-bit. No network call.
 
 | URL | Bytes |
 | --- | --- |
